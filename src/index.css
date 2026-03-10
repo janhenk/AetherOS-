@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .glass-panel {
+    background: rgba(19, 200, 236, 0.05);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(19, 200, 236, 0.1);
+  }
+
+  .neon-aura-primary {
+    box-shadow: 0 0 15px rgba(19, 200, 236, 0.3);
+  }
+
+  .neon-aura-secondary {
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+  }
+}
+
+/* Base scrollbar styling for webkit */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(19, 200, 236, 0.2);
+  border-radius: 10px;
+}

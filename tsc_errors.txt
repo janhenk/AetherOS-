@@ -1,0 +1,7 @@
+src/App.tsx(3,23): error TS6133: 'useAppContext' is declared but its value is never read.
+src/components/AppHeader/AppHeader.tsx(2,10): error TS1484: 'AgentId' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/ChatPanel/ChatPanel.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/Header/Header.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OkudiagramPanel/OkudiagramPanel.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/StardateClock/StardateClock.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/TypingIndicator/TypingIndicator.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
