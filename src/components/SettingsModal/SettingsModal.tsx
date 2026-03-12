@@ -17,6 +17,7 @@ const SettingsModal = memo(function SettingsModal() {
     const { state, dispatch } = useAppContext();
     const { settings, isSettingsOpen } = state;
     const [localSettings, setLocalSettings] = useState<Settings>(() => ({ ...settings }));
+    const [yoloConfirmStep, setYoloConfirmStep] = useState(0);
 
     const handleSave = useCallback(() => {
         dispatch({ type: 'UPDATE_SETTINGS', payload: localSettings });
@@ -25,6 +26,7 @@ const SettingsModal = memo(function SettingsModal() {
 
     const handleCancel = useCallback(() => {
         setLocalSettings({ ...settings });
+        setYoloConfirmStep(0);
         dispatch({ type: 'TOGGLE_SETTINGS' });
     }, [dispatch, settings]);
 
@@ -151,6 +153,72 @@ const SettingsModal = memo(function SettingsModal() {
                             </details>
                         ))}
                     </Field>
+
+                    {/* Sandbox Network Access */}
+                    <Field label="SANDBOX NETWORK ACCESS" hint="WARNING: Enabling this allows the C# Docker Sandbox to reach the internet and host machines.">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <button
+                                type="button"
+                                onClick={() => setLocalSettings((s) => ({ ...s, isSandboxNetworkEnabled: !s.isSandboxNetworkEnabled }))}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    padding: '8px 16px', borderRadius: 4,
+                                    background: localSettings.isSandboxNetworkEnabled ? 'var(--lcars-warning)' : 'var(--lcars-bg-muted)',
+                                    color: localSettings.isSandboxNetworkEnabled ? '#141414' : 'var(--lcars-text-dim)',
+                                    border: `1px solid ${localSettings.isSandboxNetworkEnabled ? 'var(--lcars-warning)' : 'var(--lcars-border)'}`,
+                                    fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer',
+                                    transition: 'all 0.2s', width: '100%', justifyContent: 'center'
+                                }}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                                    {localSettings.isSandboxNetworkEnabled ? 'wifi' : 'wifi_off'}
+                                </span>
+                                {localSettings.isSandboxNetworkEnabled ? 'NETWORK ENABLED' : 'NETWORK OFFLINE'}
+                            </button>
+                        </div>
+                    </Field>
+
+                    {/* Security Protocols */}
+                    <Field label="SECURITY PROTOCOLS" hint="Starfleet Protocol (Standard) vs Section 31 (YOLO Mode)">
+                        <div style={{ display: 'flex', gap: 12 }}>
+                            <button
+                                onClick={() => dispatch({ type: 'SET_YOLO_MODE', payload: false })}
+                                style={{
+                                    ...pillBtnStyle,
+                                    flex: 1,
+                                    background: !state.isYoloMode ? 'var(--lcars-sage)' : 'transparent',
+                                    color: !state.isYoloMode ? '#141414' : 'var(--lcars-text-dim)',
+                                    border: `1px solid ${!state.isYoloMode ? 'var(--lcars-sage)' : '#2a2a2a'}`,
+                                }}
+                            >
+                                STARFLEET (SAFE)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!state.isYoloMode) {
+                                        if (yoloConfirmStep === 0) {
+                                            setYoloConfirmStep(1);
+                                            setTimeout(() => setYoloConfirmStep(0), 3000);
+                                        } else {
+                                            dispatch({ type: 'SET_YOLO_MODE', payload: true });
+                                            setYoloConfirmStep(0);
+                                        }
+                                    }
+                                }}
+                                style={{
+                                    ...pillBtnStyle,
+                                    flex: 1,
+                                    background: state.isYoloMode ? '#ff0000' : yoloConfirmStep === 1 ? '#cc5500' : 'transparent',
+                                    color: state.isYoloMode || yoloConfirmStep === 1 ? '#ffffff' : 'var(--lcars-text-dim)',
+                                    border: `1px solid ${state.isYoloMode ? '#ff0000' : yoloConfirmStep === 1 ? '#cc5500' : '#2a2a2a'}`,
+                                }}
+                            >
+                                {state.isYoloMode ? 'YOLO MODE (RISKY)' : yoloConfirmStep === 1 ? 'CLICK AGAIN TO CONFIRM' : 'YOLO MODE (RISKY)'}
+                            </button>
+                        </div>
+                    </Field>
+
                 </div>
 
                 {/* Footer */}

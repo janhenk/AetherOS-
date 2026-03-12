@@ -1,0 +1,11 @@
+# Required for AetherOS
+curl
+git
+util-linux
+ca-certificates
+gnupg
+lsb-release
+ssh
+build-essential
+node-typescript
+node-express

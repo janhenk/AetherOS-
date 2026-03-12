@@ -22,6 +22,16 @@ export default {
                 "xl": "3rem",
                 "full": "9999px"
             },
+            keyframes: {
+                pan: {
+                    '0%': { backgroundPosition: '0% 0%' },
+                    '50%': { backgroundPosition: '100% 100%' },
+                    '100%': { backgroundPosition: '0% 0%' },
+                }
+            },
+            animation: {
+                'pan-slow': 'pan 60s ease-in-out infinite',
+            }
         },
     },
     plugins: [],

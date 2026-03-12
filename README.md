@@ -1,73 +1,69 @@
-# React + TypeScript + Vite
+# AetherOS: Starfleet Server Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+AetherOS is a futuristic, Starfleet-inspired server management dashboard designed for Docker orchestration, real-time telemetry, and AI-driven system control.
 
-Currently, two official plugins are available:
+## Key Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+> [!TIP]
+> **New to AetherOS?** Read the [Comprehensive User Guide](file:///C:/Users/jhede/.gemini/antigravity/brain/9040936d-593c-4b53-b46a-4938ed97decb/AetherOS_User_Guide.md) for a detailed walkthrough of all features with screenshots.
 
-## React Compiler
+- **Live Telemetry**: Real-time CPU, RAM, Network, and Storage monitoring.
+- **Docker Orchestration**: Start, stop, restart, and inspect containers via the LCARS interface.
+- **Integrated App Store**: One-click deployment for CasaOS-compatible applications.
+- **AI Agent Integration**: Traffic Controller and Network Monitor AI agents with full filesystem access and app store searching.
+- **Cross-Platform**: Built to run on Windows and Linux (Ubuntu/Debian).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Custom ISO Build (Expert)
 
-## Expanding the ESLint configuration
+You can build a "Pre-installed" bootable AetherOS ISO using `simple-cdd`. This MUST be done on a Linux system.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1.  **Enter the OS directory**: `cd os`
+2.  **Run the build script**:
+    ```bash
+    chmod +x build-iso.sh
+    ./build-iso.sh
+    ```
+The script will download the Debian 12 base and package AetherOS into a bootable image located in `iso-build/images/`.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Quick Start (Fresh Linux Install)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+To install AetherOS on a fresh Linux server:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/janhenk/AetherOS-.git
+   cd "AetherOS-"
+   ```
+2. **Run the installer**:
+   ```bash
+   chmod +x install.sh
+   ./install.sh
+   ```
+
+## Docker Deployment (Pre-installed)
+
+If you already have Docker and Docker Compose:
+
+```bash
+docker-compose up -d
 ```
+The dashboard will be available at `http://localhost:5175`.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Development Setup
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. **Install dependencies**: `npm install`
+2. **Run Dev Overlay (Vite)**: `npm run dev`
+3. **Build & Start Production Server**: 
+   ```bash
+   npm run build
+   npm start
+   ```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Configuration
+
+- **API Key**: Enter your Google Gemini API key in the Dashboard Settings (Cog icon) to enable AI agents.
+- **Chat History**: Persisted locally in `chat_history.json`.
+- **Custom Stores**: Add new CasaOS store URLs in the App Store modal.
+
+---
+*Subspace Transmission Ends*
