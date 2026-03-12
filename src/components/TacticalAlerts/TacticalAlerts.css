@@ -1,0 +1,138 @@
+.tactical-alerts-container {
+    background: rgba(10, 10, 20, 0.4);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(19, 200, 236, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    animation: slideInDown 0.5s ease-out;
+}
+
+.tactical-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--lcars-primary);
+    margin-bottom: 12px;
+    opacity: 0.8;
+}
+
+.alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tactical-alert-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 6px;
+    position: relative;
+    border-left: 4px solid transparent;
+    background: rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease;
+}
+
+.tactical-alert-item:hover {
+    transform: translateX(4px);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.tactical-alert-item.severity-high {
+    border-left-color: var(--lcars-secondary); /* Pink/Red for high alert */
+    background: rgba(168, 85, 247, 0.05);
+}
+
+.tactical-alert-item.severity-medium {
+    border-left-color: #f59e0b; /* Orange */
+}
+
+.tactical-alert-item.severity-low {
+    border-left-color: var(--lcars-primary); /* Cyan */
+}
+
+.alert-badge {
+    height: 28px;
+    width: 28px;
+    min-width: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--lcars-text-dim);
+}
+
+.severity-high .alert-badge {
+    color: var(--lcars-secondary);
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+}
+
+.alert-content {
+    flex: 1;
+}
+
+.alert-message {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 4px;
+    color: #fff;
+}
+
+.alert-suggestion {
+    font-size: 0.75rem;
+    color: var(--lcars-text-dim);
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.execute-btn {
+    background: var(--lcars-primary);
+    color: #000;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: opacity 0.2s;
+}
+
+.severity-high .execute-btn {
+    background: var(--lcars-secondary);
+}
+
+.execute-btn:hover {
+    opacity: 0.8;
+}
+
+.dismiss-btn {
+    background: transparent;
+    border: none;
+    color: var(--lcars-text-dim);
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.dismiss-btn:hover {
+    opacity: 1;
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
