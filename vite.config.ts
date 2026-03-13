@@ -354,7 +354,7 @@ const apiPlugin = () => {
           const { url } = body;
           if (!url || !url.startsWith('https://')) throw new Error('Valid secure URL is required');
 
-          const storeRoot = path.join(process.cwd(), 'Example Store');
+          const storeRoot = path.join(process.cwd(), 'example-store');
           if (!fs.existsSync(storeRoot)) fs.mkdirSync(storeRoot, { recursive: true });
 
           // Extract a pretty name from the URL filename
@@ -367,8 +367,8 @@ const apiPlugin = () => {
           const targetDir = path.join(storeRoot, providerId);
           const zipPath = path.join(os.tmpdir(), providerId + '.zip');
 
-          // Download and extract zip via powershell
-          const cmd = `powershell -Command "Invoke-WebRequest -Uri '${url}' -OutFile '${zipPath}'; Expand-Archive -Path '${zipPath}' -DestinationPath '${targetDir}' -Force; Remove-Item -Path '${zipPath}'"`;
+          // Download and extract using curl and unzip
+          const cmd = `curl -L '${url}' -o '${zipPath}' && mkdir -p '${targetDir}' && unzip -o '${zipPath}' -d '${targetDir}' && rm '${zipPath}'`;
 
           await execPromise(cmd);
 
