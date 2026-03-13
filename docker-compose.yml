@@ -26,7 +26,7 @@ services:
       - docker-socket-proxy
     volumes:
       - ./chat_history.json:/app/chat_history.json
-      - ./Example Store:/app/Example Store
+      - ./example-store:/app/example-store
     environment:
       - PORT=5175
       - NODE_ENV=production

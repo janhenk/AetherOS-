@@ -11108,3 +11108,31 @@ SELECT COUNT(TRIGGER_NAME) FROM QRTZ_TRIGGERS WHERE SCHED_NAME = 'nexus' AND NOT
 org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "METRICS_LOG" not found (this database is empty); SQL statement:
 INSERT INTO metrics_log (metric_name, metric_value, metric_date, node_id)
     VALUES (?, ?, ?, ?) [42104-232]
+2026-03-13 15:57:39.177674Z jdbc[66]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "SECURITY_USER" not found (this database is empty); SQL statement:
+SELECT * FROM security_user WHERE id = ?; [42104-232]
+2026-03-13 15:57:39.178433Z jdbc[66]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "NODE_HEARTBEAT" not found (this database is empty); SQL statement:
+SELECT nb.*, ni.node_info AS ni_node_info, ni.system_info AS ni_system_info
+      FROM node_heartbeat nb
+      LEFT JOIN node_info_data ni ON nb.heartbeat_id = ni.heartbeat_id
+     WHERE nb.id IN (SELECT max(id)
+                    FROM node_heartbeat
+                   WHERE heartbeat_time >= CURRENT_TIMESTAMP - CAST(? AS INT) * INTERVAL '1' SECOND
+                GROUP BY heartbeat_id) [42104-232]
+2026-03-13 15:57:39.179152Z jdbc[66]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "QRTZ_JOB_DETAILS" not found (this database is empty); SQL statement:
+SELECT JOB_NAME, JOB_GROUP FROM QRTZ_JOB_DETAILS WHERE SCHED_NAME = 'nexus' AND JOB_GROUP = ? [42104-232]
+2026-03-13 15:57:39.180124Z jdbc[66]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "AGGREGATED_METRICS" not found (this database is empty); SQL statement:
+SELECT MAX(metric_value) FROM aggregated_metrics
+                             WHERE metric_name = ?
+                               AND period_type = ?
+                               AND metric_date >= ?
+                               AND metric_date < ?; [42104-232]
+2026-03-13 15:57:39.180773Z jdbc[66]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "QRTZ_JOB_DETAILS" not found (this database is empty); SQL statement:
+SELECT SCHED_NAME, JOB_NAME, JOB_GROUP, DESCRIPTION, JOB_CLASS_NAME, IS_DURABLE, REQUESTS_RECOVERY, JOB_DATA FROM QRTZ_JOB_DETAILS WHERE SCHED_NAME = ? AND JOB_GROUP = ? [42104-232]
+2026-03-13 15:57:39.874587Z jdbc[66]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "QRTZ_TRIGGERS" not found (this database is empty); SQL statement:
+SELECT TRIGGER_NAME, TRIGGER_GROUP, NEXT_FIRE_TIME, PRIORITY FROM QRTZ_TRIGGERS WHERE SCHED_NAME = 'nexus' AND TRIGGER_STATE = ? AND NEXT_FIRE_TIME <= ? AND (MISFIRE_INSTR = -1 OR (MISFIRE_INSTR != -1 AND NEXT_FIRE_TIME >= ?)) ORDER BY NEXT_FIRE_TIME ASC, PRIORITY DESC [42104-232]
