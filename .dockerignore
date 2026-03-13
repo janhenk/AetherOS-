@@ -1,0 +1,20 @@
+# Dependency directories
+node_modules/
+.npm/
+
+# Build artifacts
+dist/
+
+# Git history
+.git/
+.gitignore
+
+# AetherOS localized runtime structures
+logs/
+aetheros/
+chat_history.json
+tsc_errors.txt
+nexus-data/
+
+# OS Image Build
+os/iso-build/

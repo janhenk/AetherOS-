@@ -1,0 +1,56 @@
+:root {
+  --lcars-primary: #34d3f3;
+  --lcars-secondary: #c084fc;
+  --lcars-accent: #fcd34d;
+  --lcars-bg: #0a0a0f;
+  --lcars-text: #e2e8f0;
+  --lcars-text-dim: #94a3b8;
+  --lcars-sage: #94fde1;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .glass-panel {
+    background: rgba(19, 200, 236, 0.12);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(19, 200, 236, 0.25);
+  }
+
+  .neon-aura-primary {
+    box-shadow: 0 0 15px rgba(19, 200, 236, 0.3);
+  }
+
+  .neon-aura-secondary {
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+  }
+
+  .incursion-alert {
+    --lcars-primary: #ff0000 !important;
+    --lcars-secondary: #000000 !important;
+    --lcars-accent: #cc0000 !important;
+    background: #0a0000 !important;
+    color: #ff3333 !important;
+  }
+
+  .incursion-alert .glass-panel {
+    background: rgba(255, 0, 0, 0.05) !important;
+    border-color: rgba(255, 0, 0, 0.2) !important;
+  }
+}
+
+/* Base scrollbar styling for webkit */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(19, 200, 236, 0.2);
+  border-radius: 10px;
+}

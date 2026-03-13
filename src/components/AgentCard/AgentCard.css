@@ -1,0 +1,81 @@
+/* ────── Agent Card ────── */
+.agent-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.agent-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-top-left-radius: var(--radius-pill);
+    border-bottom-left-radius: var(--radius-pill);
+    color: var(--lcars-onyx);
+    background: var(--agent-color, var(--lcars-sage));
+    transition: filter var(--trans-fast);
+}
+
+.agent-card:hover .agent-card-header {
+    filter: brightness(1.1);
+}
+
+.agent-card.active .agent-card-header {
+    animation: pulse-glow 2.5s ease-in-out infinite;
+    --glow-color: color-mix(in srgb, var(--agent-color, var(--lcars-sage)), transparent 55%);
+}
+
+.agent-card-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agent-card-name {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--lcars-onyx);
+}
+
+.agent-card-status-text {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--lcars-onyx);
+}
+
+/* Sub-info strip */
+.agent-card-sub {
+    background: rgba(0, 0, 0, 0.25);
+    padding: 5px 8px 5px 28px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-left: 4px solid var(--agent-color, var(--lcars-sage));
+    color: var(--agent-color, var(--lcars-sage));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.agent-card-clear-btn {
+    background: none;
+    border: none;
+    color: rgba(0, 0, 0, 0.45);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    padding: 0 4px;
+    transition: color var(--trans-fast);
+    text-transform: uppercase;
+}
+
+.agent-card-clear-btn:hover {
+    color: var(--lcars-onyx);
+}
