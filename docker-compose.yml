@@ -34,6 +34,20 @@ services:
     networks:
       - aether-net
 
+  aetheros-updater:
+    build: ./updater
+    container_name: aetheros-updater
+    restart: always
+    depends_on:
+      - docker-socket-proxy
+    volumes:
+      # Map the full host repository to /app so the updater can manipulate git files natively
+      - ./:/app
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+    networks:
+      - aether-net
+
 networks:
   aether-net:
     driver: bridge
