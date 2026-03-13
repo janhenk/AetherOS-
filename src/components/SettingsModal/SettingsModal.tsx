@@ -42,6 +42,11 @@ const SettingsModal = memo(function SettingsModal() {
         }
     }, []);
 
+    const handleLogout = useCallback(() => {
+        localStorage.removeItem('aetheros_token');
+        window.location.reload();
+    }, []);
+
     const handleSave = useCallback(() => {
         dispatch({ type: 'UPDATE_SETTINGS', payload: localSettings });
         dispatch({ type: 'TOGGLE_SETTINGS' });
@@ -262,6 +267,28 @@ const SettingsModal = memo(function SettingsModal() {
                                 {isUpdating ? 'sync' : 'system_update'}
                             </span>
                             {isUpdating ? (updateMessage || 'UPDATING...') : 'UPDATE AETHEROS'}
+                        </button>
+                    </Field>
+
+                    {/* Security - Logout */}
+                    <Field label="SECURITY" hint="Terminate active session and lock system.">
+                        <button
+                            type="button"
+                            onClick={handleLogout}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '8px 16px', borderRadius: 4,
+                                background: '#1c0e0e',
+                                color: '#ff6666',
+                                border: '1px solid #4a1c1c',
+                                fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer',
+                                transition: 'all 0.2s', width: '100%', justifyContent: 'center'
+                            }}
+                        >
+                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                                logout
+                            </span>
+                            TERMINATE SESSION
                         </button>
                     </Field>
 
