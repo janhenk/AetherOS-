@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import YAML from 'yaml';
 import { spawn } from 'child_process';
+import crypto from 'crypto';
 
 const execPromise = util.promisify(exec);
 
@@ -41,6 +42,8 @@ function isPathSafe(targetPath: string) {
 const apiPlugin = () => {
   let previousCpus = os.cpus();
   let cachedStorage = 50;
+  const activeTokens = new Set<string>();
+  const CHAT_HISTORY_FILE = path.join(process.cwd(), 'chat_history.json');
 
   // Tactical Monitoring Loop
   const runTacticalMonitor = async () => {
@@ -144,6 +147,73 @@ const apiPlugin = () => {
 
       updateStorage();
       setInterval(updateStorage, 60000);
+
+      // --- Global Authentication Middleware ---
+      server.middlewares.use((req: any, res: any, next: any) => {
+         if (!req.url?.startsWith('/api/')) return next();
+         if (req.url?.startsWith('/api/auth/')) return next();
+         
+         const authHeader = req.headers.authorization;
+         if (!authHeader || !authHeader.startsWith('Bearer ')) {
+             res.statusCode = 401;
+             return res.end(JSON.stringify({ error: 'Unauthorized' }));
+         }
+         
+         const token = authHeader.split(' ')[1];
+         if (!activeTokens.has(token)) {
+             res.statusCode = 401;
+             return res.end(JSON.stringify({ error: 'Invalid token' }));
+         }
+         next();
+      });
+
+      server.middlewares.use('/api/auth/status', async (req: any, res: any) => {
+        if (req.method !== 'GET') { res.statusCode = 405; return res.end(); }
+        try {
+          const data = fs.existsSync(CHAT_HISTORY_FILE) ? JSON.parse(fs.readFileSync(CHAT_HISTORY_FILE, 'utf8')) : {};
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ needsSetup: !data.passwordHash }));
+        } catch (err: any) { res.statusCode = 500; res.end(JSON.stringify({ error: err.message })); }
+      });
+
+      server.middlewares.use('/api/auth/setup', async (req: any, res: any) => {
+        if (req.method !== 'POST') { res.statusCode = 405; return res.end(); }
+        try {
+          const { password } = await getBody(req);
+          if (!password) throw new Error('Password required');
+          const data = fs.existsSync(CHAT_HISTORY_FILE) ? JSON.parse(fs.readFileSync(CHAT_HISTORY_FILE, 'utf8')) : {};
+          if (data.passwordHash) throw new Error('Already setup');
+          
+          data.passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+          fs.writeFileSync(CHAT_HISTORY_FILE, JSON.stringify(data, null, 2));
+          
+          const token = crypto.randomUUID();
+          activeTokens.add(token);
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: true, token }));
+        } catch (err: any) { res.statusCode = 500; res.end(JSON.stringify({ error: err.message })); }
+      });
+
+      server.middlewares.use('/api/auth/login', async (req: any, res: any) => {
+        if (req.method !== 'POST') { res.statusCode = 405; return res.end(); }
+        try {
+          const { password } = await getBody(req);
+          if (!password) throw new Error('Password required');
+          const data = fs.existsSync(CHAT_HISTORY_FILE) ? JSON.parse(fs.readFileSync(CHAT_HISTORY_FILE, 'utf8')) : {};
+          if (!data.passwordHash) throw new Error('Not setup yet');
+          
+          const hash = crypto.createHash('sha256').update(password).digest('hex');
+          if (hash !== data.passwordHash) {
+             res.statusCode = 401;
+             return res.end(JSON.stringify({ error: 'Invalid password' }));
+          }
+          
+          const token = crypto.randomUUID();
+          activeTokens.add(token);
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: true, token }));
+        } catch (err: any) { res.statusCode = 500; res.end(JSON.stringify({ error: err.message })); }
+      });
 
       server.middlewares.use('/api/docker/action', async (req: any, res: any) => {
         if (req.method !== 'POST') {
@@ -604,7 +674,6 @@ const apiPlugin = () => {
       });
 
       // --- Chat Persistence APIs ---
-      const CHAT_HISTORY_FILE = path.join(process.cwd(), 'chat_history.json');
 
       server.middlewares.use('/api/chat/load', async (_req: any, res: any) => {
         try {

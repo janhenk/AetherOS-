@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import { apiFetch } from '../../utils/api';
 import { useGemini } from '../../hooks/useGemini';
 import CreateContainerModal from '../DockerManager/CreateContainerModal';
 import AppStoreModal from '../AppStore/AppStoreModal';
@@ -335,7 +336,7 @@ export default function SectorView() {
                                     <button onClick={async () => {
                                         setIsProcessing(container.id);
                                         try {
-                                            const response = await fetch('/api/docker/inspect', {
+                                            const response = await apiFetch('/api/docker/inspect', {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
                                                 body: JSON.stringify({ id: container.id })

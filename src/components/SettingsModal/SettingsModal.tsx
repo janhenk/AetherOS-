@@ -1,5 +1,6 @@
 import React, { memo, useState, useCallback } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import { apiFetch } from '../../utils/api';
 import { AGENTS } from '../../agents';
 import type { GeminiModel, Settings } from '../../types';
 
@@ -25,7 +26,7 @@ const SettingsModal = memo(function SettingsModal() {
         setIsUpdating(true);
         setUpdateMessage('INITIALIZING UPDATE SEQUENCE...');
         try {
-            const res = await fetch('/api/system/update', { method: 'POST' });
+            const res = await apiFetch('/api/system/update', { method: 'POST' });
             if (!res.ok) throw new Error('Update signal failed');
             
             setUpdateMessage('REBUILDING SYSTEM (PAGE WILL RELOAD SHORTLY)...');

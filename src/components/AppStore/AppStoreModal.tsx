@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { apiFetch } from '../../utils/api';
 import type { StoreApp } from '../../types';
 
 interface AppStoreModalProps {
@@ -25,7 +26,7 @@ export default function AppStoreModal({ onClose, onDeployed }: AppStoreModalProp
     useEffect(() => {
         const fetchApps = async () => {
             try {
-                const res = await fetch('/api/store/apps');
+                const res = await apiFetch('/api/store/apps');
                 const data = await res.json();
                 if (data.apps) {
                     setApps(data.apps);
@@ -46,7 +47,7 @@ export default function AppStoreModal({ onClose, onDeployed }: AppStoreModalProp
         setAddingProvider(true);
         setError(null);
         try {
-            const res = await fetch('/api/store/provider', {
+            const res = await apiFetch('/api/store/provider', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: providerUrl })
@@ -59,7 +60,7 @@ export default function AppStoreModal({ onClose, onDeployed }: AppStoreModalProp
 
             // Refresh apps list
             setLoading(true);
-            const appsRes = await fetch('/api/store/apps');
+            const appsRes = await apiFetch('/api/store/apps');
             const appsData = await appsRes.json();
             if (appsData.apps) setApps(appsData.apps);
             else setError(appsData.error);
@@ -77,7 +78,7 @@ export default function AppStoreModal({ onClose, onDeployed }: AppStoreModalProp
             const bodyData: any = { appPath: app.path };
             if (customComposeData) bodyData.composeData = customComposeData;
 
-            const res = await fetch('/api/store/deploy', {
+            const res = await apiFetch('/api/store/deploy', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -101,7 +102,7 @@ export default function AppStoreModal({ onClose, onDeployed }: AppStoreModalProp
     const handleAdvancedDeployInit = async (app: StoreApp) => {
         setFetchingCompose(true);
         try {
-            const res = await fetch('/api/store/compose/read', {
+            const res = await apiFetch('/api/store/compose/read', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ appPath: app.path })
