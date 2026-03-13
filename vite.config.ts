@@ -102,35 +102,6 @@ const apiPlugin = () => {
     }
   };
 
-  setInterval(runTacticalMonitor, 10000); // Pulse every 10 seconds
-  runTacticalMonitor();
-
-  // Poll storage occasionally to not block
-  const updateStorage = async () => {
-    try {
-      const { stdout } = await execPromise('wmic logicaldisk get size,freespace,caption');
-      const lines = stdout.split('\n');
-      let total = 0;
-      let free = 0;
-      for (let i = 1; i < lines.length; i++) {
-        const parts = lines[i].trim().split(/\s+/);
-        if (parts.length >= 3 && parts[0] === 'C:') {
-          free += parseInt(parts[1], 10);
-          total += parseInt(parts[2], 10);
-        }
-      }
-      if (total > 0) {
-        cachedStorage = ((total - free) / total) * 100;
-      }
-    } catch (e) {
-      // Ignore or default
-    }
-  };
-
-  // Update storage initially
-  updateStorage();
-  setInterval(updateStorage, 60000); // Once a minute
-
   const getBody = (req: any): Promise<any> => {
     return new Promise((resolve) => {
       let body = '';
@@ -145,6 +116,35 @@ const apiPlugin = () => {
   return {
     name: 'api-plugin',
     configureServer(server: any) {
+      // Background monitor
+      setInterval(runTacticalMonitor, 10000);
+      runTacticalMonitor();
+
+      // Poll storage occasionally to not block
+      const updateStorage = async () => {
+        try {
+          const { stdout } = await execPromise('wmic logicaldisk get size,freespace,caption');
+          const lines = stdout.split('\n');
+          let total = 0;
+          let free = 0;
+          for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].trim().split(/\s+/);
+            if (parts.length >= 3 && parts[0] === 'C:') {
+              free += parseInt(parts[1], 10);
+              total += parseInt(parts[2], 10);
+            }
+          }
+          if (total > 0) {
+            cachedStorage = ((total - free) / total) * 100;
+          }
+        } catch (e) {
+          // Ignore
+        }
+      };
+
+      updateStorage();
+      setInterval(updateStorage, 60000);
+
       server.middlewares.use('/api/docker/action', async (req: any, res: any) => {
         if (req.method !== 'POST') {
           res.statusCode = 405;
