@@ -1,19 +1,22 @@
-# Build Stage
-FROM node:20-slim AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-
-# Runtime Stage
 FROM node:20-slim
 WORKDIR /app
+
+# Install dependencies first for caching purposes
 COPY package*.json ./
-RUN npm install --omit=dev
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server ./server
-COPY --from=builder /app/Example\ Store ./Example\ Store
+RUN npm install
+
+# Copy application code (excluding .dockerignore items)
+COPY . .
+
+# Build Vite frontend production files
+RUN npm run build
+
+# Prune development dependencies to shrink image size
+RUN npm prune --omit=dev
+
+# Change permissions for safety
+RUN chown -R node:node /app
+USER node
 
 # Expose the dashboard port
 EXPOSE 5175
