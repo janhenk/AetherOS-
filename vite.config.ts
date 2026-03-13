@@ -380,6 +380,39 @@ const apiPlugin = () => {
         }
       });
 
+      // --- SYSTEM UPDATER ROUTE (Proxies to the updater microservice) ---
+      server.middlewares.use('/api/system/update', async (req: any, res: any) => {
+         if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end('Method Not Allowed');
+          return;
+         }
+
+         try {
+            console.log('Sending system update request to internal updater service...');
+            
+            // We ping the secondary container.
+            const response = await fetch('http://aetheros-updater:8080/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+            });
+
+            if (!response.ok) {
+               throw new Error(`Updater service returned HTTP ${response.status}`);
+            }
+
+            const data: any = await response.json();
+            
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: true, message: data.status }));
+
+         } catch (e: any) {
+            console.error('Failed to trigger update:', e);
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: e.message || 'Internal Updater routing failed' }));
+         }
+      });
+
       server.middlewares.use('/api/store/compose/read', async (req: any, res: any) => {
         if (req.method !== 'POST') {
           res.statusCode = 405;

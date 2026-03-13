@@ -3,7 +3,7 @@ WORKDIR /app
 
 # Install OS dependencies required by the App Store (child_process curl/unzip calls)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl unzip && \
+    apt-get install -y --no-install-recommends curl unzip ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 

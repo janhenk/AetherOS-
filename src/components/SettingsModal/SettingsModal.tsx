@@ -18,6 +18,28 @@ const SettingsModal = memo(function SettingsModal() {
     const { settings, isSettingsOpen } = state;
     const [localSettings, setLocalSettings] = useState<Settings>(() => ({ ...settings }));
     const [yoloConfirmStep, setYoloConfirmStep] = useState(0);
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+
+    const handleUpdate = useCallback(async () => {
+        setIsUpdating(true);
+        setUpdateMessage('INITIALIZING UPDATE SEQUENCE...');
+        try {
+            const res = await fetch('/api/system/update', { method: 'POST' });
+            if (!res.ok) throw new Error('Update signal failed');
+            
+            setUpdateMessage('REBUILDING SYSTEM (PAGE WILL RELOAD SHORTLY)...');
+            
+            // The system rebuild takes a few seconds and drops the connection.
+            // When it comes back online, we reload to get the fresh UI.
+            setTimeout(() => {
+                window.location.reload();
+            }, 10000);
+        } catch (e: any) {
+            setUpdateMessage(`UPDATE FAILED: ${e.message}`);
+            setIsUpdating(false);
+        }
+    }, []);
 
     const handleSave = useCallback(() => {
         dispatch({ type: 'UPDATE_SETTINGS', payload: localSettings });
@@ -217,6 +239,29 @@ const SettingsModal = memo(function SettingsModal() {
                                 {state.isYoloMode ? 'YOLO MODE (RISKY)' : yoloConfirmStep === 1 ? 'CLICK AGAIN TO CONFIRM' : 'YOLO MODE (RISKY)'}
                             </button>
                         </div>
+                    </Field>
+
+                    {/* Auto-Updater */}
+                    <Field label="SYSTEM FIRMWARE" hint="Pull latest updates from GitHub and rebuild AetherOS containers natively.">
+                        <button
+                            type="button"
+                            onClick={handleUpdate}
+                            disabled={isUpdating}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '8px 16px', borderRadius: 4,
+                                background: isUpdating ? 'var(--lcars-warning)' : 'var(--lcars-bg-muted)',
+                                color: isUpdating ? '#141414' : 'var(--lcars-text-dim)',
+                                border: `1px solid ${isUpdating ? 'var(--lcars-warning)' : 'var(--lcars-border)'}`,
+                                fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', cursor: isUpdating ? 'wait' : 'pointer',
+                                transition: 'all 0.2s', width: '100%', justifyContent: 'center'
+                            }}
+                        >
+                            <span className="material-symbols-outlined" style={{ fontSize: 18, animation: isUpdating ? 'spin 2s linear infinite' : 'none' }}>
+                                {isUpdating ? 'sync' : 'system_update'}
+                            </span>
+                            {isUpdating ? (updateMessage || 'UPDATING...') : 'UPDATE AETHEROS'}
+                        </button>
                     </Field>
 
                 </div>

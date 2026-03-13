@@ -26,11 +26,25 @@ services:
       - docker-socket-proxy
     volumes:
       - ./chat_history.json:/app/chat_history.json
-      - ./Example Store:/app/Example Store
+      - ./example-store:/app/example-store
     environment:
       - PORT=5175
       - NODE_ENV=production
       - DOCKER_HOST=http://docker-socket-proxy:2375
+    networks:
+      - aether-net
+
+  aetheros-updater:
+    build: ./updater
+    container_name: aetheros-updater
+    restart: always
+    depends_on:
+      - docker-socket-proxy
+    volumes:
+      # Map the full host repository to /app so the updater can manipulate git files natively
+      - ./:/app
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
     networks:
       - aether-net
 
