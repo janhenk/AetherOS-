@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAppContext } from '../../context/AppContext';
+import { apiFetch } from '../../utils/api';
 import './TacticalAlerts.css';
 
 export const TacticalAlerts: React.FC = () => {
@@ -11,7 +12,7 @@ export const TacticalAlerts: React.FC = () => {
     const handleExecuteSuggestion = async (insight: any) => {
         if (insight.type === 'resource' && insight.containerId) {
             try {
-                await fetch('/api/docker/action', {
+                await apiFetch('/api/docker/action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id: insight.containerId, action: 'restart' })

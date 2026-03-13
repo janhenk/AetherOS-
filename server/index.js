@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import YAML from 'yaml';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,6 +79,61 @@ updateStorage();
 setInterval(updateStorage, 60000);
 
 // --- API Endpoints ---
+
+const activeTokens = new Set();
+const CHAT_HISTORY_FILE = path.join(process.cwd(), 'chat_history.json');
+
+app.post('/api/auth/setup', async (req, res) => {
+    try {
+        const { password } = req.body;
+        if (!password) return res.status(400).json({ error: 'Password required' });
+        
+        const data = fs.existsSync(CHAT_HISTORY_FILE) ? JSON.parse(fs.readFileSync(CHAT_HISTORY_FILE, 'utf8')) : {};
+        if (data.passwordHash) return res.status(400).json({ error: 'Already setup' });
+        
+        data.passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+        fs.writeFileSync(CHAT_HISTORY_FILE, JSON.stringify(data, null, 2));
+        
+        const token = crypto.randomUUID();
+        activeTokens.add(token);
+        res.json({ success: true, token });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { password } = req.body;
+        if (!password) return res.status(400).json({ error: 'Password required' });
+        
+        const data = fs.existsSync(CHAT_HISTORY_FILE) ? JSON.parse(fs.readFileSync(CHAT_HISTORY_FILE, 'utf8')) : {};
+        if (!data.passwordHash) return res.status(400).json({ error: 'Not setup yet' });
+        
+        const hash = crypto.createHash('sha256').update(password).digest('hex');
+        if (hash !== data.passwordHash) return res.status(401).json({ error: 'Invalid password' });
+        
+        const token = crypto.randomUUID();
+        activeTokens.add(token);
+        res.json({ success: true, token });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/auth/status', (req, res) => {
+    try {
+        const data = fs.existsSync(CHAT_HISTORY_FILE) ? JSON.parse(fs.readFileSync(CHAT_HISTORY_FILE, 'utf8')) : {};
+        res.json({ needsSetup: !data.passwordHash });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.use('/api', (req, res, next) => {
+    if (req.path.startsWith('/auth/')) return next();
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const token = authHeader.split(' ')[1];
+    if (!activeTokens.has(token)) return res.status(401).json({ error: 'Invalid token' });
+    
+    next();
+});
 
 app.get('/api/stats', async (req, res) => {
     try {

@@ -6,6 +6,7 @@ import React, {
     type ReactNode,
 } from 'react';
 import type { AppState, AppAction, AgentId, Settings } from '../types';
+import { apiFetch } from '../utils/api';
 
 const DEFAULT_SETTINGS: Settings = {
     apiKey: '',
@@ -160,7 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Poll Live Server Stats
         const fetchStats = async () => {
             try {
-                const res = await fetch('/api/stats');
+                const res = await apiFetch('/api/stats');
                 if (res.ok) {
                     const data = await res.json();
                     dispatch({ type: 'UPDATE_SERVER_STATE', payload: data });
@@ -176,7 +177,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Load Chat History
         const loadHistory = async () => {
             try {
-                const res = await fetch('/api/chat/load');
+                const res = await apiFetch('/api/chat/load');
                 if (res.ok) {
                     const history = await res.json();
                     if (Object.keys(history).length > 0) {
@@ -200,7 +201,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (totalMessages === 0) return;
 
             try {
-                await fetch('/api/chat/save', {
+                await apiFetch('/api/chat/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(state.conversations)

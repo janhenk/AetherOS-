@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import { apiFetch } from '../../utils/api';
 
 interface TerminalModalProps {
     isOpen: boolean;
@@ -39,7 +40,7 @@ export default function TerminalModal({ isOpen, onClose }: TerminalModalProps) {
 
     const fetchCwd = async () => {
         try {
-            const res = await fetch('/api/terminal/exec', {
+            const res = await apiFetch('/api/terminal/exec', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ command: '' })
@@ -67,7 +68,7 @@ export default function TerminalModal({ isOpen, onClose }: TerminalModalProps) {
         setIsExecuting(true);
 
         try {
-            const res = await fetch('/api/terminal/exec', {
+            const res = await apiFetch('/api/terminal/exec', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ command: cmd })

@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react';
 import { GoogleGenAI, Type, type Chat } from '@google/genai';
 import { useAppContext } from '../context/AppContext';
+import { apiFetch } from '../utils/api';
 import { getAgent } from '../agents';
 import type { AgentId, Message, DockerCreateSpec } from '../types';
 
@@ -212,20 +213,20 @@ export function useGemini() {
                             let result = {};
                             if (call.name === 'getDockerLogs') {
                                 const args = call.args as { id: string };
-                                const startRes = await fetch('/api/docker/logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+                                const startRes = await apiFetch('/api/docker/logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
                                 result = await startRes.json();
                             } else if (call.name === 'editDockerConfig') {
                                 const spec = call.args as DockerCreateSpec;
                                 if (spec.name) {
                                     const nameClean = spec.name.replace(/^\//, '');
-                                    await fetch('/api/docker/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: nameClean, action: 'rm' }) });
+                                    await apiFetch('/api/docker/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: nameClean, action: 'rm' }) });
                                     spec.name = nameClean;
                                 }
-                                const startRes = await fetch('/api/docker/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(spec) });
+                                const startRes = await apiFetch('/api/docker/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(spec) });
                                 result = await startRes.json();
                             } else if (call.name === 'searchAppStore') {
                                 const args = call.args as { query: string };
-                                const searchRes = await fetch('/api/store/apps');
+                                const searchRes = await apiFetch('/api/store/apps');
                                 const allApps = await searchRes.json();
                                 if (allApps.apps) {
                                     const q = args.query.toLowerCase();
@@ -240,15 +241,15 @@ export function useGemini() {
                                 }
                             } else if (call.name === 'listFiles') {
                                 const args = call.args as { path?: string };
-                                const lsRes = await fetch(`/api/fs/ls${args.path ? '?path=' + encodeURIComponent(args.path) : ''}`);
+                                const lsRes = await apiFetch(`/api/fs/ls${args.path ? '?path=' + encodeURIComponent(args.path) : ''}`);
                                 result = await lsRes.json();
                             } else if (call.name === 'readFile') {
                                 const args = call.args as { path: string };
-                                const readRes = await fetch('/api/fs/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+                                const readRes = await apiFetch('/api/fs/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
                                 result = await readRes.json();
                             } else if (call.name === 'runCSharpScript') {
                                 const args = call.args as { code: string };
-                                const runRes = await fetch('/api/docker/run-csx', { 
+                                const runRes = await apiFetch('/api/docker/run-csx', { 
                                     method: 'POST', 
                                     headers: { 'Content-Type': 'application/json' }, 
                                     body: JSON.stringify({ ...args, allowNetwork: state.settings.isSandboxNetworkEnabled || false }) 
@@ -256,7 +257,7 @@ export function useGemini() {
                                 result = await runRes.json();
                             } else if (call.name === 'writeFile') {
                                 const args = call.args as { path: string; content: string };
-                                const writeRes = await fetch('/api/fs/write', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+                                const writeRes = await apiFetch('/api/fs/write', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
                                 result = await writeRes.json();
                             }
 

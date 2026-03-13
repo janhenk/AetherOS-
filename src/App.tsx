@@ -6,7 +6,8 @@ import VesselStatus from './components/VesselStatus/VesselStatus';
 import CommandLogs from './components/CommandLogs/CommandLogs';
 import SectorView from './components/SectorView/SectorView';
 import SettingsModal from './components/SettingsModal/SettingsModal';
-
+import { AuthOverlay } from './components/Auth/AuthOverlay';
+import { useState } from 'react';
 import { useAppContext } from './context/AppContext';
 
 function AppLayout() {
@@ -44,10 +45,17 @@ function AppLayout() {
 }
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
   return (
-    <AppProvider>
-      <AppLayout />
-    </AppProvider>
+    <>
+      {!isAuthenticated && <AuthOverlay onAuthenticated={() => setIsAuthenticated(true)} />}
+      {isAuthenticated && (
+        <AppProvider>
+          <AppLayout />
+        </AppProvider>
+      )}
+    </>
   );
 }
 
