@@ -189,7 +189,7 @@ app.post('/api/docker/logs', async (req, res) => {
 
 app.get('/api/store/apps', async (req, res) => {
     try {
-        const storeRoot = path.join(process.cwd(), 'Example Store');
+        const storeRoot = path.join(process.cwd(), 'example-store');
         if (!fs.existsSync(storeRoot)) fs.mkdirSync(storeRoot, { recursive: true });
         const apps = [];
         const findCompose = (dir, depth = 0) => {
@@ -226,13 +226,14 @@ app.post('/api/store/provider', async (req, res) => {
     try {
         const { url } = req.body;
         const filename = (url.split('/').pop() || 'store').replace('.zip', '').replace(/[^a-z0-9]/gi, '');
-        const targetDir = path.join(process.cwd(), 'Example Store', `store_${filename}_${Date.now()}`);
+        const targetDir = path.join(process.cwd(), 'example-store', `store_${filename}_${Date.now()}`);
         const zipPath = path.join(os.tmpdir(), `${filename}.zip`);
 
         if (IS_WIN) {
             await execPromise(`powershell -Command "Invoke-WebRequest -Uri '${url}' -OutFile '${zipPath}'; Expand-Archive -Path '${zipPath}' -DestinationPath '${targetDir}' -Force; Remove-Item '${zipPath}'"`);
         } else {
-            await execPromise(`curl -L '${url}' -o '${zipPath}' && mkdir -p '${targetDir}' && unzip -o '${zipPath}' -d '${targetDir}' && rm '${zipPath}'`);
+            // Append the -k (insecure) flag so curl completely ignores certificate verification issues on CasaOS mirrors
+            await execPromise(`curl -kL '${url}' -o '${zipPath}' && mkdir -p '${targetDir}' && unzip -o '${zipPath}' -d '${targetDir}' && rm '${zipPath}'`);
         }
         res.json({ success: true, provider: filename });
     } catch (err) { res.status(500).json({ error: err.message }); }
