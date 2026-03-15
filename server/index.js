@@ -26,6 +26,8 @@ if (fs.existsSync(distPath)) {
 }
 
 const activeDeployments = [];
+const tacticalInsights = [];
+const STORES_FILE = path.join(process.cwd(), 'server', 'stores.json');
 let cachedStorage = 50;
 let previousCpus = os.cpus();
 const IS_WIN = os.platform() === 'win32';
@@ -204,7 +206,8 @@ app.get('/api/stats', async (req, res) => {
             cpuLoad, ramUsed, storageUsed: cachedStorage, containers,
             deployments: activeDeployments, ipAddress, dockerRunning,
             hostname: os.hostname(), osInfo: `${os.type()} ${os.release()}`,
-            networkInbound, networkOutbound
+            networkInbound, networkOutbound,
+            insights: tacticalInsights
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -242,6 +245,64 @@ app.post('/api/docker/logs', async (req, res) => {
         res.json({ logs: stdout + '\n' + stderr });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// --- Background Update Orchestrator ---
+const runBackgroundUpdates = async () => {
+    try {
+        const stores = fs.existsSync(STORES_FILE) ? JSON.parse(fs.readFileSync(STORES_FILE, 'utf8')) : [];
+        if (stores.length === 0) return;
+
+        auditLog('SYSTEM', 'BACKGROUND_UPDATE_START', { storesCount: stores.length }, true);
+
+        for (const storeUrl of stores) {
+            try {
+                const filename = (storeUrl.split('/').pop() || 'store').replace('.zip', '').replace(/[^a-z0-9]/gi, '');
+                const targetDir = path.join(process.cwd(), 'example-store', `store_${filename}_auto`);
+                const zipPath = path.join(os.tmpdir(), `${filename}_auto.zip`);
+
+                if (IS_WIN) {
+                    await execPromise(`powershell -Command "Invoke-WebRequest -Uri '${storeUrl}' -OutFile '${zipPath}'; Expand-Archive -Path '${zipPath}' -DestinationPath '${targetDir}' -Force; Remove-Item '${zipPath}'"`);
+                } else {
+                    await execPromise(`curl -kL '${storeUrl}' -o '${zipPath}' && mkdir -p '${targetDir}' && unzip -o '${zipPath}' -d '${targetDir}' && rm '${zipPath}'`);
+                }
+            } catch (e) {
+                auditLog('SYSTEM', 'STORE_REFRESH_FAILED', { storeUrl, error: e.message }, false);
+            }
+        }
+
+        // Image Pulling Logic
+        try {
+            const { stdout } = await execPromise('docker ps --format "{{.Image}} {{.Names}}"');
+            const lines = stdout.trim().split('\n').filter(Boolean);
+            for (const line of lines) {
+                const [image, name] = line.split(' ');
+                if (image.includes(':latest') || image.includes(':nightly')) {
+                    await execPromise(`docker pull ${image}`);
+                    tacticalInsights.push({
+                        id: `update-${name}-${Date.now()}`,
+                        type: 'system',
+                        severity: 'medium',
+                        message: `Automated Update: Pulled new image for '${name}' (${image}).`,
+                        suggestion: `Redeploy stack to apply the new image layers.`,
+                        timestamp: new Date()
+                    });
+                }
+            }
+        } catch (e) { }
+
+        // Cleanup old tactical alerts (keep last 10)
+        if (tacticalInsights.length > 10) tacticalInsights.splice(0, tacticalInsights.length - 10);
+
+        auditLog('SYSTEM', 'BACKGROUND_UPDATE_FINISH', {}, true);
+    } catch (err) {
+        auditLog('SYSTEM', 'BACKGROUND_UPDATE_FATAL', { error: err.message }, false);
+    }
+};
+
+// Run updates every 6 hours
+setInterval(runBackgroundUpdates, 6 * 60 * 60 * 1000);
+// Run initial update after 10 seconds
+setTimeout(runBackgroundUpdates, 10000);
 
 app.get('/api/store/apps', async (req, res) => {
     try {
@@ -291,6 +352,14 @@ app.post('/api/store/provider', async (req, res) => {
             // Append the -k (insecure) flag so curl completely ignores certificate verification issues on CasaOS mirrors
             await execPromise(`curl -kL '${url}' -o '${zipPath}' && mkdir -p '${targetDir}' && unzip -o '${zipPath}' -d '${targetDir}' && rm '${zipPath}'`);
         }
+
+        // Persist Store URL
+        const stores = fs.existsSync(STORES_FILE) ? JSON.parse(fs.readFileSync(STORES_FILE, 'utf8')) : [];
+        if (!stores.includes(url)) {
+            stores.push(url);
+            fs.writeFileSync(STORES_FILE, JSON.stringify(stores, null, 2));
+        }
+
         res.json({ success: true, provider: filename });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });

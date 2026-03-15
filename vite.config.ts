@@ -13,6 +13,7 @@ const execPromise = util.promisify(exec);
 
 // Track ongoing docker-compose deployments
 const activeDeployments: Array<{ id: string; name: string; status: string }> = [];
+const STORES_FILE = path.join(process.cwd(), 'server', 'stores.json');
 let terminalCwd = process.cwd();
 
 // --- Tactical Monitoring ---
@@ -102,6 +103,56 @@ const apiPlugin = () => {
       tacticalInsights = newInsights;
     } catch (e) {
       // Docker might not be running
+    };
+  };
+  
+  // --- Background Update Orchestrator ---
+  const runBackgroundUpdates = async () => {
+    try {
+        const stores = fs.existsSync(STORES_FILE) ? JSON.parse(fs.readFileSync(STORES_FILE, 'utf8')) : [];
+        if (stores.length === 0) return;
+
+        auditLog('SYSTEM', 'BACKGROUND_UPDATE_START', { storesCount: stores.length }, true);
+
+        for (const storeUrl of stores) {
+            try {
+                const filename = (storeUrl.split('/').pop() || 'store').replace('.zip', '').replace(/[^a-z0-9]/gi, '');
+                const targetDir = path.join(process.cwd(), 'example-store', `store_${filename}_auto`);
+                const zipPath = path.join(os.tmpdir(), `${filename}_auto.zip`);
+
+                // In dev mode (vite.config.ts), we are likely on Windows
+                await execPromise(`powershell -Command "Invoke-WebRequest -Uri '${storeUrl}' -OutFile '${zipPath}'; Expand-Archive -Path '${zipPath}' -DestinationPath '${targetDir}' -Force; Remove-Item '${zipPath}'"`);
+            } catch (e: any) {
+                auditLog('SYSTEM', 'STORE_REFRESH_FAILED', { storeUrl, error: e.message }, false);
+            }
+        }
+
+        // Image Pulling Logic
+        try {
+            const { stdout } = await execPromise('docker ps --format "{{.Image}} {{.Names}}"');
+            const lines = stdout.trim().split('\n').filter(Boolean);
+            for (const line of lines) {
+                const [image, name] = line.split(' ');
+                if (image.includes(':latest') || image.includes(':nightly')) {
+                    await execPromise(`docker pull ${image}`);
+                    tacticalInsights.push({
+                        id: `update-${name}-${Date.now()}`,
+                        type: 'system',
+                        severity: 'medium',
+                        message: `Automated Update: Pulled new image for '${name}' (${image}).`,
+                        suggestion: `Redeploy stack to apply the new image layers.`,
+                        timestamp: new Date()
+                    });
+                }
+            }
+        } catch (e) { }
+
+        // Cleanup old tactical alerts (keep last 10)
+        if (tacticalInsights.length > 10) tacticalInsights.splice(0, tacticalInsights.length - 10);
+
+        auditLog('SYSTEM', 'BACKGROUND_UPDATE_FINISH', {}, true);
+    } catch (err: any) {
+        auditLog('SYSTEM', 'BACKGROUND_UPDATE_FATAL', { error: err.message }, false);
     }
   };
 
@@ -122,6 +173,10 @@ const apiPlugin = () => {
       // Background monitor
       setInterval(runTacticalMonitor, 10000);
       runTacticalMonitor();
+
+      // Background updates every 6 hours
+      setInterval(runBackgroundUpdates, 6 * 60 * 60 * 1000);
+      setTimeout(runBackgroundUpdates, 15000); // Wait a bit longer in dev
 
       // Poll storage occasionally to not block
       const updateStorage = async () => {
@@ -450,6 +505,13 @@ const apiPlugin = () => {
           const cmd = `curl -L '${url}' -o '${zipPath}' && unzip -o '${zipPath}' -d '${targetDir}' && rm '${zipPath}'`;
 
           await execPromise(cmd);
+          
+          // Persist Store URL
+          const stores = fs.existsSync(STORES_FILE) ? JSON.parse(fs.readFileSync(STORES_FILE, 'utf8')) : [];
+          if (!stores.includes(url)) {
+              stores.push(url);
+              fs.writeFileSync(STORES_FILE, JSON.stringify(stores, null, 2));
+          }
 
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ success: true, provider: filename }));
