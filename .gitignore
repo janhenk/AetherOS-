@@ -21,4 +21,13 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
+# Persistence & Workspaces
+aetheros/workspace/**
+Example Store/**
+example-store/**
+composed-apps/**
+chat_history.json
+server/stores.json
+*.trace.db
+*.lock.db
+
