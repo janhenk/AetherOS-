@@ -20,10 +20,6 @@ RUN npm run build
 # Prune development dependencies to shrink image size
 RUN npm prune --omit=dev
 
-# Change permissions for safety
-RUN chown -R node:node /app
-USER node
-
 # Expose the dashboard port
 EXPOSE 5175
 
