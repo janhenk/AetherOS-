@@ -5,6 +5,7 @@ import { useGemini } from '../../hooks/useGemini';
 import CreateContainerModal from '../DockerManager/CreateContainerModal';
 import AppStoreModal from '../AppStore/AppStoreModal';
 import TerminalModal from '../Terminal/TerminalModal';
+import AdvancedDeploymentModal from '../DockerManager/AdvancedDeploymentModal';
 import { TacticalAlerts } from '../TacticalAlerts/TacticalAlerts';
 import type { DockerCreateSpec } from '../../types';
 
@@ -75,6 +76,7 @@ export default function SectorView() {
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [isAppStoreOpen, setAppStoreOpen] = useState(false);
     const [isTerminalOpen, setTerminalOpen] = useState(false);
+    const [isAdvancedModalOpen, setAdvancedModalOpen] = useState(false);
     const [editingContainerSpec, setEditingContainerSpec] = useState<DockerCreateSpec | undefined>(undefined);
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
@@ -290,6 +292,11 @@ export default function SectorView() {
                             title="Open AetherOS App Grid"
                         >apps</button>
                         <button
+                            onClick={() => setAdvancedModalOpen(true)}
+                            className="material-symbols-outlined text-amber-500 text-xl opacity-80 hover:text-white hover:opacity-100 transition-colors"
+                            title="Advanced Compose Deployment"
+                        >layers</button>
+                        <button
                             onClick={() => { setEditingContainerSpec(undefined); setCreateModalOpen(true); }}
                             className="material-symbols-outlined text-primary text-xl opacity-80 hover:text-white hover:opacity-100 transition-colors"
                             title="Deploy New Node"
@@ -369,6 +376,12 @@ export default function SectorView() {
                 onClose={() => setCreateModalOpen(false)}
                 onSubmit={handleContainerSubmit}
                 initialData={editingContainerSpec}
+            />
+
+            <AdvancedDeploymentModal
+                 isOpen={isAdvancedModalOpen}
+                 onClose={() => setAdvancedModalOpen(false)}
+                 onDeployed={() => {}} // Polling handled by AppContext
             />
 
             {isAppStoreOpen && (

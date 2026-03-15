@@ -752,6 +752,67 @@ const apiPlugin = () => {
         }
       });
 
+      server.middlewares.use('/api/docker/compose-deploy', async (req: any, res: any) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          return res.end();
+        }
+        try {
+          const body = await getBody(req);
+          const { projectName, composeData } = body;
+          if (!projectName) throw new Error('Project name is required');
+          if (!composeData) throw new Error('Compose YAML is required');
+
+          const safeProjectName = projectName.replace(/[^a-zA-Z0-9_-]/g, '_');
+          const workspaceDir = path.join(process.cwd(), 'composed-apps', safeProjectName);
+          
+          if (!fs.existsSync(workspaceDir)) {
+            fs.mkdirSync(workspaceDir, { recursive: true });
+          }
+
+          const composeFile = path.join(workspaceDir, 'docker-compose.yml');
+          fs.writeFileSync(composeFile, composeData, 'utf8');
+
+          const deployId = `compose-${safeProjectName}-${Date.now()}`;
+          activeDeployments.push({
+            id: deployId,
+            name: `Project: ${projectName}`,
+            status: 'Pulling and starting...'
+          });
+
+          // Execute docker compose up -d asynchronously
+          const child = spawn('docker', ['compose', 'up', '-d'], {
+            cwd: workspaceDir,
+            detached: true
+          });
+
+          child.stdout.on('data', (data) => {
+             const output = data.toString();
+             const d = activeDeployments.find(d => d.id === deployId);
+             if (d) d.status = output.split('\n').filter(Boolean).pop() || d.status;
+          });
+
+          child.stderr.on('data', (data) => {
+             const output = data.toString();
+             const d = activeDeployments.find(d => d.id === deployId);
+             if (d) d.status = output.split('\n').filter(Boolean).pop() || d.status;
+          });
+
+          child.on('close', () => {
+            const idx = activeDeployments.findIndex(d => d.id === deployId);
+            if (idx !== -1) activeDeployments.splice(idx, 1);
+          });
+
+          child.unref();
+
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: true, deployId }));
+        } catch (err: any) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+
       server.middlewares.use('/api/stats', async (_req: any, res: any) => {
         try {
           const currentCpus = os.cpus();
