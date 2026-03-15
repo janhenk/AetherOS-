@@ -480,6 +480,55 @@ app.post('/api/chat/save', (req, res) => {
     catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/docker/compose-deploy', async (req, res) => {
+    try {
+        const { projectName, composeData } = req.body;
+        if (!projectName) throw new Error('Project name is required');
+        if (!composeData) throw new Error('Compose YAML is required');
+
+        const safeProjectName = projectName.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const workspaceDir = path.join(process.cwd(), 'composed-apps', safeProjectName);
+        
+        if (!fs.existsSync(workspaceDir)) {
+            fs.mkdirSync(workspaceDir, { recursive: true });
+        }
+
+        const composeFile = path.join(workspaceDir, 'docker-compose.yml');
+        fs.writeFileSync(composeFile, composeData, 'utf8');
+
+        const deployId = `compose-${safeProjectName}-${Date.now()}`;
+        activeDeployments.push({
+            id: deployId,
+            name: `Project: ${projectName}`,
+            status: 'Pulling and starting...'
+        });
+
+        const child = spawn('docker', ['compose', 'up', '-d'], {
+            cwd: workspaceDir,
+            detached: true
+        });
+
+        child.stdout.on('data', (data) => {
+             const output = data.toString();
+             const d = activeDeployments.find(d => d.id === deployId);
+             if (d) d.status = output.split('\n').filter(Boolean).pop() || d.status;
+        });
+
+        child.stderr.on('data', (data) => {
+             const output = data.toString();
+             const d = activeDeployments.find(d => d.id === deployId);
+             if (d) d.status = output.split('\n').filter(Boolean).pop() || d.status;
+        });
+
+        child.on('close', () => {
+            const idx = activeDeployments.findIndex(d => d.id === deployId);
+            if (idx !== -1) activeDeployments.splice(idx, 1);
+        });
+
+        res.json({ success: true, deployId });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/docker/create', async (req, res) => {
     try {
         const { image, name, ports, volumes, env, resources } = req.body;
