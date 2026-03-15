@@ -27,10 +27,11 @@ services:
     volumes:
       - ./chat_history.json:/app/chat_history.json
       - ./example-store:/app/example-store
+      - ./composed-apps:/app/composed-apps
     environment:
       - PORT=5175
       - NODE_ENV=production
-      - DOCKER_HOST=http://docker-socket-proxy:2375
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
     networks:
       - aether-net
 

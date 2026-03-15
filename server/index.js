@@ -508,6 +508,11 @@ app.post('/api/docker/compose-deploy', async (req, res) => {
             detached: true
         });
 
+        child.on('error', (err) => {
+            const d = activeDeployments.find(d => d.id === deployId);
+            if (d) d.status = `FATAL: ${err.message}`;
+        });
+
         child.stdout.on('data', (data) => {
              const output = data.toString();
              const d = activeDeployments.find(d => d.id === deployId);
