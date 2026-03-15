@@ -32,8 +32,14 @@ export default function AdvancedDeploymentModal({ isOpen, onClose, onDeployed }:
             });
 
             if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Deployment failed');
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Deployment failed');
+                } else {
+                    const text = await response.text();
+                    throw new Error(`Server Error (${response.status}): ${text.slice(0, 100)}...`);
+                }
             }
 
             onDeployed();
