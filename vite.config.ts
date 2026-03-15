@@ -437,8 +437,17 @@ const apiPlugin = () => {
           const targetDir = path.join(storeRoot, providerId);
           const zipPath = path.join(os.tmpdir(), providerId + '.zip');
 
+          // Ensure target directory exists using Node's native API
+          try {
+            if (!fs.existsSync(targetDir)) {
+              fs.mkdirSync(targetDir, { recursive: true });
+            }
+          } catch (mkdirErr: any) {
+            throw new Error(`Failed to create repository directory: ${mkdirErr.message}`);
+          }
+
           // Download and extract using curl and unzip
-          const cmd = `curl -L '${url}' -o '${zipPath}' && mkdir -p '${targetDir}' && unzip -o '${zipPath}' -d '${targetDir}' && rm '${zipPath}'`;
+          const cmd = `curl -L '${url}' -o '${zipPath}' && unzip -o '${zipPath}' -d '${targetDir}' && rm '${zipPath}'`;
 
           await execPromise(cmd);
 
