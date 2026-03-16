@@ -96,7 +96,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
         case 'UPDATE_SETTINGS': {
             const newSettings = { ...state.settings, ...action.payload };
-            try { localStorage.setItem('lcars_settings', JSON.stringify(newSettings)); } catch (_) { /* ignore */ }
+            // Settings persistence is now handled by the server
             return { ...state, settings: newSettings };
         }
 
@@ -142,21 +142,27 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-    const [state, dispatch] = useReducer(appReducer, INITIAL_STATE, (init) => {
-        try {
-            const stored = localStorage.getItem('lcars_settings');
-            if (stored) {
-                const settings = JSON.parse(stored) as Settings;
-                return { ...init, settings: { ...init.settings, ...settings } };
-            }
-        } catch (_) { /* ignore */ }
-        return init;
-    });
+    const [state, dispatch] = useReducer(appReducer, INITIAL_STATE);
 
     useEffect(() => {
-        if (!state.settings.apiKey) {
-            dispatch({ type: 'TOGGLE_SETTINGS' });
-        }
+        // Load System Settings from Server
+        const loadSettings = async () => {
+            try {
+                const res = await apiFetch('/api/config/get');
+                if (res.ok) {
+                    const data = await res.json();
+                    dispatch({ type: 'UPDATE_SETTINGS', payload: data });
+                    
+                    // If no model or key (proxied key) configured, open settings
+                    if (!data.model || (!data.hasKey && !data.apiKey)) {
+                        dispatch({ type: 'TOGGLE_SETTINGS' });
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load system settings", err);
+            }
+        };
+        loadSettings();
 
         // Poll Live Server Stats
         const fetchStats = async () => {

@@ -20,6 +20,7 @@ export interface Message {
 
 export interface Settings {
     apiKey: string;
+    hasKey?: boolean;
     model: GeminiModel;
     temperature: number;
     isSandboxNetworkEnabled?: boolean;

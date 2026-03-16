@@ -33,7 +33,7 @@ const MARKDOWN_COMPONENTS: any = {
 };
 
 const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
-    const { state } = useAppContext();
+    const { state, dispatch } = useAppContext();
     const { sendMessage } = useGemini();
 
     const { conversations, agentStatus } = state;
@@ -90,6 +90,11 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                     <span className="text-[9px] uppercase tracking-widest text-slate-500">
                         {isProcessing ? 'Processing' : 'Ready'}
                     </span>
+                    <button
+                        onClick={() => dispatch({ type: 'CLEAR_CONVERSATION', payload: activeAgent })}
+                        className="material-symbols-outlined text-primary/40 hover:text-red-500 transition-colors text-sm ml-2 pointer-events-auto"
+                        title="Clear Communications Log"
+                    >delete</button>
                 </div>
             </div>
 

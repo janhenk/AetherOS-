@@ -15,20 +15,20 @@ function AppLayout() {
   const activeAgent = state.activeAgent;
 
   return (
-    <div className={`relative flex h-[100dvh] w-full flex-col overflow-hidden transition-colors duration-700 ${state.isYoloMode ? 'incursion-alert' : ''}`}>
+    <div className={`relative flex min-h-[100dvh] lg:h-[100dvh] w-full flex-col overflow-y-auto lg:overflow-hidden transition-colors duration-700 ${state.isYoloMode ? 'incursion-alert' : ''}`}>
       <AppHeader
         activeAgent={activeAgent}
         setActiveAgent={(id) => dispatch({ type: 'SELECT_AGENT', payload: id })}
         onSettingsClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
       />
 
-      <main className="flex flex-1 flex-col p-6 overflow-hidden">
-        <div className="flex flex-1 flex-col gap-6 lg:flex-row w-full max-w-screen-3xl mx-auto overflow-hidden">
-          <aside className="flex flex-col gap-6 lg:w-[400px] shrink-0 overflow-y-auto pr-1">
+      <main className="flex flex-1 flex-col p-4 lg:p-6 overflow-y-auto lg:overflow-hidden">
+        <div className="flex flex-1 flex-col gap-6 lg:flex-row w-full max-w-screen-3xl mx-auto lg:overflow-hidden">
+          <aside className="flex flex-col gap-6 lg:w-[400px] shrink-0 lg:overflow-y-auto pr-0 lg:pr-1">
             <SectorView />
           </aside>
 
-          <section className="flex flex-1 flex-col min-w-0 gap-6 overflow-hidden">
+          <section className="flex flex-1 flex-col min-w-0 gap-6 lg:overflow-hidden min-h-[500px] lg:min-h-0">
             <div className="shrink-0">
               <VesselStatus />
             </div>

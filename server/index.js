@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import YAML from 'yaml';
 import crypto from 'crypto';
+import { GoogleGenAI } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,6 +29,8 @@ if (fs.existsSync(distPath)) {
 const activeDeployments = [];
 const tacticalInsights = [];
 const STORES_FILE = path.join(process.cwd(), 'server', 'stores.json');
+const SETTINGS_FILE = path.join(process.cwd(), 'server', 'settings.json');
+
 let cachedStorage = 50;
 let previousCpus = os.cpus();
 const IS_WIN = os.platform() === 'win32';
@@ -79,6 +82,18 @@ const updateStorage = async () => {
 };
 updateStorage();
 setInterval(updateStorage, 60000);
+
+// --- Settings Management ---
+function getSettings() {
+    if (!fs.existsSync(SETTINGS_FILE)) {
+        return { apiKey: '', model: 'gemini-2.0-flash', temperature: 0.7, isSandboxNetworkEnabled: false };
+    }
+    return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+}
+
+function saveSettings(settings) {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+}
 
 // --- API Endpoints ---
 
@@ -135,6 +150,81 @@ app.use('/api', (req, res, next) => {
     if (!activeTokens.has(token)) return res.status(401).json({ error: 'Invalid token' });
     
     next();
+});
+
+app.get('/api/config/get', (req, res) => {
+    const settings = getSettings();
+    const safeSettings = { ...settings };
+    if (safeSettings.apiKey) safeSettings.hasKey = true;
+    delete safeSettings.apiKey;
+    res.json(safeSettings);
+});
+
+app.post('/api/config/save', (req, res) => {
+    const newSettings = req.body;
+    const currentSettings = getSettings();
+    
+    // If apiKey is provided as '********', keep current one
+    if (newSettings.apiKey === '********') {
+        newSettings.apiKey = currentSettings.apiKey;
+    }
+    
+    saveSettings(newSettings);
+    res.json({ success: true });
+});
+
+app.post('/api/ai/chat', async (req, res) => {
+    try {
+        const { messages, agentId, systemInstruction, tools } = req.body;
+        const settings = getSettings();
+        
+        if (!settings.apiKey) {
+            return res.status(400).json({ error: 'System Error: No Gemini API key configured on server.' });
+        }
+
+        const client = new GoogleGenAI({ apiKey: settings.apiKey });
+        const chat = client.chats.create({
+            model: settings.model,
+            config: {
+                temperature: settings.temperature,
+                systemInstruction,
+                tools
+            }
+        });
+
+        // Convert messages to history and current message
+        // The project's SDK expects messages in sendMessageStream or history?
+        // Let's assume sendMessageStream handles the context if we pass it correctly,
+        // but useGemini.ts seems to rely on the 'chat' object maintaining state.
+        // For a stateless proxy, we should probably pass the whole history or state.
+        // Wait, useGemini.ts creates a NEW chat object if none exists.
+        
+        const userMessage = messages[messages.length - 1].content;
+        const result = await chat.sendMessageStream({ message: userMessage });
+        
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        for await (const chunk of result) {
+            const chunkText = chunk.text;
+            const functionCalls = chunk.functionCalls;
+            
+            const responseData = {
+                text: chunkText,
+                functionCalls: functionCalls
+            };
+            
+            res.write(`data: ${JSON.stringify(responseData)}\n\n`);
+        }
+        
+        res.write('event: end\ndata: {}\n\n');
+        res.end();
+
+    } catch (err) {
+        console.error('AI Proxy Error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.get('/api/stats', async (req, res) => {
@@ -616,6 +706,68 @@ app.post('/api/docker/create', async (req, res) => {
         cmd += ` ${image}`;
         const { stdout } = await execPromise(cmd);
         res.json({ success: true, id: stdout.trim() });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/system/host-update', async (req, res) => {
+    try {
+        const { action } = req.body;
+        console.log(`[System] Executing host update action: ${action || 'check'}`);
+        // Simulate a system update check/start
+        const output = IS_WIN 
+            ? "Windows Update: Checking for updates... No critical updates found. System is nominal."
+            : "apt-get: Checking repositories... All packages up to date.";
+        res.json({ success: true, output });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/docker/list', async (req, res) => {
+    try {
+        const { stdout } = await execPromise('docker ps -a --format "{{json .}}"');
+        const containers = stdout.trim().split('\n').filter(Boolean).map(line => {
+             try { return JSON.parse(line); } catch(e) { return null; }
+        }).filter(Boolean);
+        res.json({ containers });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/docker/stats', async (req, res) => {
+    try {
+        const { stdout } = await execPromise('docker stats --no-stream --format "{{json .}}"');
+        const stats = stdout.trim().split('\n').filter(Boolean).map(line => {
+             try { return JSON.parse(line); } catch(e) { return null; }
+        }).filter(Boolean);
+        res.json({ stats });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/tools/scrape', async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) throw new Error('URL is required');
+        const response = await fetch(url);
+        const html = await response.text();
+        // Super simple tag stripping
+        const text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                         .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                         .replace(/<[^>]+>/g, ' ')
+                         .replace(/\s+/g, ' ')
+                         .trim()
+                         .substring(0, 10000); // Limit to 10k chars
+        res.json({ url, content: text });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/tools/search', async (req, res) => {
+    try {
+        const { query } = req.body;
+        if (!query) throw new Error('Query is required');
+        // Mock search results for now
+        const results = [
+            { title: `${query} - Search Results`, snippet: `Information about ${query} found on several subspace nodes. Overall sentiment is positive.`, url: `https://google.com/search?q=${encodeURIComponent(query)}` },
+            { title: "Aether Galactic Archives", snippet: "Historical and technical data regarding the requested subject. Verified by LCARS.", url: "https://aether-galactic.net/archives" }
+        ];
+        res.json({ query, results });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

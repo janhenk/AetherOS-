@@ -47,9 +47,29 @@ const SettingsModal = memo(function SettingsModal() {
         window.location.reload();
     }, []);
 
-    const handleSave = useCallback(() => {
-        dispatch({ type: 'UPDATE_SETTINGS', payload: localSettings });
-        dispatch({ type: 'TOGGLE_SETTINGS' });
+    const handleSave = useCallback(async () => {
+        setIsUpdating(true);
+        setUpdateMessage('SAVING SYSTEM CONFIGURATION...');
+        try {
+            const res = await apiFetch('/api/config/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(localSettings),
+            });
+            if (!res.ok) throw new Error('Failed to save settings');
+            
+            // Re-fetch to confirm and update state
+            const getRes = await apiFetch('/api/config/get');
+            const freshData = await getRes.json();
+            
+            dispatch({ type: 'UPDATE_SETTINGS', payload: freshData });
+            dispatch({ type: 'TOGGLE_SETTINGS' });
+        } catch (e: any) {
+            setUpdateMessage(`SAVE FAILED: ${e.message}`);
+        } finally {
+            setIsUpdating(false);
+            setUpdateMessage(null);
+        }
     }, [dispatch, localSettings]);
 
     const handleCancel = useCallback(() => {
@@ -103,11 +123,11 @@ const SettingsModal = memo(function SettingsModal() {
                 {/* Modal Body */}
                 <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
                     {/* API Key */}
-                    <Field label="GEMINI API KEY" hint="Stored in localStorage — never sent to any server other than Google">
+                    <Field label="GEMINI API KEY" hint="Stored securely on the server — never exposed to the browser.">
                         <input
                             id="api-key-input"
                             type="password"
-                            value={localSettings.apiKey}
+                            value={localSettings.apiKey || (state.settings.hasKey ? '********' : '')}
                             onChange={(e) => setLocalSettings((s) => ({ ...s, apiKey: e.target.value }))}
                             placeholder="AIza..."
                             style={inputStyle}

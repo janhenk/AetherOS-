@@ -130,13 +130,22 @@ export default function SectorView() {
     };
 
     const handleDiagnose = () => {
-        // Find a failing container first, or just pick the first one
-        const target = containers.find(c => c.status !== 'running') || containers[0];
-        if (!target) return;
+        if (containers.length === 0) return;
+        
+        // Comprehensive health check message
+        const containerNames = containers.map(c => c.name.replace(/^\//, '')).join(', ');
+        const prompt = `Perform a comprehensive health check on all systems. Current Docker Nodes: ${containerNames}. Please check metrics, logs, and statuses for any anomalies.`;
 
-        // Switch to the systems/logistics agent
-        dispatch({ type: 'SELECT_AGENT', payload: 'comms' }); // Network Monitor AI
-        sendMessage('comms', `Please diagnose container: ${target.name.replace(/^\//, '')} (${target.id.substring(0, 8)})`);
+        dispatch({ type: 'SELECT_AGENT', payload: 'nav' }); // ROUTER-AI for system diagnostics
+        sendMessage('nav', prompt);
+    };
+
+    const handleDiagnoseNode = (id: string, name: string) => {
+        const cleanName = name.replace(/^\//, '');
+        const prompt = `Diagnose Docker node: ${cleanName} (${id.substring(0, 8)}). Check recent logs and resource usage for this specific container.`;
+
+        dispatch({ type: 'SELECT_AGENT', payload: 'nav' });
+        sendMessage('nav', prompt);
     };
 
     const handleDockerAction = async (id: string, action: string) => {
@@ -340,6 +349,7 @@ export default function SectorView() {
                                         <button onClick={() => handleDockerAction(container.id, 'stop')} disabled={isProcessing === container.id} className="material-symbols-outlined text-[14px] text-amber-400 hover:text-amber-300 pointer transition-colors" title="Stop">stop</button>
                                     )}
                                     <button onClick={() => handleDockerAction(container.id, 'restart')} disabled={isProcessing === container.id} className="material-symbols-outlined text-[14px] text-primary hover:text-white pointer transition-colors" title="Restart">refresh</button>
+                                    <button onClick={() => handleDiagnoseNode(container.id, container.name)} className="material-symbols-outlined text-[14px] text-amber-400 hover:text-amber-300 pointer transition-colors" title="AI Diagnose Node">troubleshoot</button>
                                     <button onClick={async () => {
                                         setIsProcessing(container.id);
                                         try {
