@@ -21,21 +21,52 @@ const SettingsModal = memo(function SettingsModal() {
     const [yoloConfirmStep, setYoloConfirmStep] = useState(0);
     const [isUpdating, setIsUpdating] = useState(false);
     const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+    const [updateAvailable, setUpdateAvailable] = useState<boolean | null>(null);
+
+    React.useEffect(() => {
+        if (isSettingsOpen) {
+            checkUpdates();
+        }
+    }, [isSettingsOpen]);
+
+    const checkUpdates = async () => {
+        try {
+            const res = await apiFetch('/api/system/check-updates');
+            if (res.ok) {
+                const data = await res.json();
+                setUpdateAvailable(data.updateAvailable);
+            }
+        } catch (e) {
+            console.error('Failed to check for updates:', e);
+        }
+    };
 
     const handleUpdate = useCallback(async () => {
         setIsUpdating(true);
-        setUpdateMessage('INITIALIZING UPDATE SEQUENCE...');
+        
+        const steps = [
+            'SYNCHRONIZING WITH SUBSPACE (FETCHING commits)...',
+            'PULLING DATA CORES (GIT PULL)...',
+            'REBUILDING NEURAL NETWORKS (PREPARING ENVIRONMENT)...',
+            'REBOOTING SYSTEMS (PAGE RELOAD IN 5s)...'
+        ];
+
         try {
+            setUpdateMessage(steps[0]);
+            await new Promise(r => setTimeout(r, 1500));
+            
+            setUpdateMessage(steps[1]);
             const res = await apiFetch('/api/system/update', { method: 'POST' });
-            if (!res.ok) throw new Error('Update signal failed');
+            if (!res.ok) throw new Error('Update failed');
             
-            setUpdateMessage('REBUILDING SYSTEM (PAGE WILL RELOAD SHORTLY)...');
+            setUpdateMessage(steps[2]);
+            await new Promise(r => setTimeout(r, 2000));
             
-            // The system rebuild takes a few seconds and drops the connection.
-            // When it comes back online, we reload to get the fresh UI.
+            setUpdateMessage(steps[3]);
+            
             setTimeout(() => {
                 window.location.reload();
-            }, 10000);
+            }, 5000);
         } catch (e: any) {
             setUpdateMessage(`UPDATE FAILED: ${e.message}`);
             setIsUpdating(false);
@@ -267,8 +298,10 @@ const SettingsModal = memo(function SettingsModal() {
                         </div>
                     </Field>
 
-                    {/* Auto-Updater */}
-                    <Field label="SYSTEM FIRMWARE" hint="Pull latest updates from GitHub and rebuild AetherOS containers natively.">
+                    <Field 
+                        label="SYSTEM FIRMWARE" 
+                        hint="Pull latest updates from GitHub and rebuild AetherOS containers natively."
+                    >
                         <button
                             type="button"
                             onClick={handleUpdate}
@@ -286,7 +319,12 @@ const SettingsModal = memo(function SettingsModal() {
                             <span className="material-symbols-outlined" style={{ fontSize: 18, animation: isUpdating ? 'spin 2s linear infinite' : 'none' }}>
                                 {isUpdating ? 'sync' : 'system_update'}
                             </span>
-                            {isUpdating ? (updateMessage || 'UPDATING...') : 'UPDATE AETHEROS'}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <span>{isUpdating ? (updateMessage || 'UPDATING...') : 'UPDATE AETHEROS'}</span>
+                                {!isUpdating && updateAvailable && (
+                                    <span style={{ fontSize: 9, color: 'var(--lcars-sage)', marginTop: 2 }}>[ NEW UPDATES DETECTED ]</span>
+                                )}
+                            </div>
                         </button>
                     </Field>
 

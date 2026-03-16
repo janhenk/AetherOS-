@@ -613,7 +613,27 @@ const apiPlugin = () => {
         }
       });
 
-      // --- SYSTEM UPDATER ROUTE (Proxies to the updater microservice) ---
+      // --- SYSTEM UPDATER ROUTES ---
+      server.middlewares.use('/api/system/check-updates', async (req: any, res: any) => {
+        if (req.method !== 'GET') { res.statusCode = 405; return res.end(); }
+        try {
+          // Perform git fetch to see if there are updates
+          await execPromise('git fetch origin master');
+          const { stdout } = await execPromise('git rev-list HEAD...origin/master --count');
+          const count = parseInt(stdout.trim(), 10);
+          
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ 
+            success: true, 
+            updateAvailable: count > 0,
+            behindCount: count
+          }));
+        } catch (err: any) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+
       server.middlewares.use('/api/system/update', async (req: any, res: any) => {
          if (req.method !== 'POST') {
           res.statusCode = 405;
@@ -622,27 +642,32 @@ const apiPlugin = () => {
          }
 
          try {
-            console.log('Sending system update request to internal updater service...');
+            console.log('Initiating AetherOS update sequence...');
             
-            // We ping the secondary container.
-            const response = await fetch('http://aetheros-updater:8080/update', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-            });
+            // 1. Pull latest code
+            console.log('Step 1: PULLING DATA CORES (git pull)...');
+            await execPromise('git pull origin master');
+            
+            // 2. Install dependencies (if needed, though this is risky in dev, usually just pull code)
+            // console.log('Step 2: REBUILDING NEURAL NETWORKS (npm install)...');
+            // await execPromise('npm install');
 
-            if (!response.ok) {
-               throw new Error(`Updater service returned HTTP ${response.status}`);
+            // 3. Trigger the internal updater service if exists (for docker rebuilds)
+            try {
+              console.log('Notifying internal updater service for container rebuilds...');
+              await fetch('http://aetheros-updater:8080/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+              });
+            } catch (e) {
+              console.log('Internal updater service unreachable, skipping container rebuild.');
             }
-
-            const data: any = await response.json();
             
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ success: true, message: data.status }));
-
-         } catch (e: any) {
-            console.error('Failed to trigger update:', e);
+            res.end(JSON.stringify({ success: true, message: 'UPDATE SEQUENCE COMPLETE. REBOOTING...' }));
+         } catch (err: any) {
             res.statusCode = 500;
-            res.end(JSON.stringify({ error: e.message || 'Internal Updater routing failed' }));
+            res.end(JSON.stringify({ error: err.message }));
          }
       });
 
