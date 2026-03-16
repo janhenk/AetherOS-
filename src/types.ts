@@ -25,6 +25,7 @@ export interface Settings {
     temperature: number;
     isSandboxNetworkEnabled?: boolean;
     registries?: { server: string; username: string }[];
+    isYoloMode?: boolean;
 }
 
 export interface SessionMetrics {

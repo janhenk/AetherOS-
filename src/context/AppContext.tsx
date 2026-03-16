@@ -153,6 +153,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     const data = await res.json();
                     dispatch({ type: 'UPDATE_SETTINGS', payload: data });
                     
+                    if (data.isYoloMode !== undefined) {
+                        dispatch({ type: 'SET_YOLO_MODE', payload: data.isYoloMode });
+                    }
+                    
                     // If no model or key (proxied key) configured, open settings
                     if (!data.model || (!data.hasKey && !data.apiKey)) {
                         dispatch({ type: 'TOGGLE_SETTINGS' });

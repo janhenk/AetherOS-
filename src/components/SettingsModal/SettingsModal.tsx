@@ -26,8 +26,14 @@ const SettingsModal = memo(function SettingsModal() {
     React.useEffect(() => {
         if (isSettingsOpen) {
             checkUpdates();
+            setLocalSettings({ ...settings });
         }
-    }, [isSettingsOpen]);
+    }, [isSettingsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Sync localSettings if global settings change (e.g. from RegistrySection)
+    React.useEffect(() => {
+        setLocalSettings(s => ({ ...s, registries: settings.registries }));
+    }, [settings.registries]);
 
     const checkUpdates = async () => {
         try {
@@ -82,10 +88,14 @@ const SettingsModal = memo(function SettingsModal() {
         setIsUpdating(true);
         setUpdateMessage('SAVING SYSTEM CONFIGURATION...');
         try {
+            const savePayload = { 
+                ...localSettings, 
+                isYoloMode: state.isYoloMode // Persist current YOLO state
+            };
             const res = await apiFetch('/api/config/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(localSettings),
+                body: JSON.stringify(savePayload),
             });
             if (!res.ok) throw new Error('Failed to save settings');
             
@@ -261,7 +271,15 @@ const SettingsModal = memo(function SettingsModal() {
                     <Field label="SECURITY PROTOCOLS" hint="Starfleet Protocol (Standard) vs Section 31 (YOLO Mode)">
                         <div style={{ display: 'flex', gap: 12 }}>
                             <button
-                                onClick={() => dispatch({ type: 'SET_YOLO_MODE', payload: false })}
+                                onClick={async () => {
+                                    dispatch({ type: 'SET_YOLO_MODE', payload: false });
+                                    // Persistent save
+                                    await apiFetch('/api/config/save', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ isYoloMode: false }),
+                                    });
+                                }}
                                 style={{
                                     ...pillBtnStyle,
                                     flex: 1,
@@ -274,7 +292,7 @@ const SettingsModal = memo(function SettingsModal() {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => {
+                                onClick={async () => {
                                     if (!state.isYoloMode) {
                                         if (yoloConfirmStep === 0) {
                                             setYoloConfirmStep(1);
@@ -282,6 +300,12 @@ const SettingsModal = memo(function SettingsModal() {
                                         } else {
                                             dispatch({ type: 'SET_YOLO_MODE', payload: true });
                                             setYoloConfirmStep(0);
+                                            // Persistent save
+                                            await apiFetch('/api/config/save', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ isYoloMode: true }),
+                                            });
                                         }
                                     }
                                 }}

@@ -91,9 +91,12 @@ setInterval(updateStorage, 60000);
 // --- Settings Management ---
 function getSettings() {
     if (!fs.existsSync(SETTINGS_FILE)) {
-        return { apiKey: '', model: 'gemini-2.0-flash', temperature: 0.7, isSandboxNetworkEnabled: false };
+        return { apiKey: '', model: 'gemini-2.0-flash', temperature: 0.7, isSandboxNetworkEnabled: false, isYoloMode: false, registries: [] };
     }
-    return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    if (settings.isYoloMode === undefined) settings.isYoloMode = false;
+    if (settings.registries === undefined) settings.registries = [];
+    return settings;
 }
 
 function saveSettings(settings) {
@@ -103,7 +106,7 @@ function saveSettings(settings) {
 // --- API Endpoints ---
 
 const activeTokens = new Set();
-const CHAT_HISTORY_FILE = path.join(process.cwd(), 'chat_history.json');
+const CHAT_HISTORY_FILE = CHAT_FILE;
 
 app.post('/api/auth/setup', async (req, res) => {
     try {
@@ -170,8 +173,18 @@ app.post('/api/config/save', (req, res) => {
     const currentSettings = getSettings();
     
     // If apiKey is provided as '********', keep current one
-    if (newSettings.apiKey === '********') {
+    if (newSettings.apiKey === '********' || !newSettings.apiKey) {
         newSettings.apiKey = currentSettings.apiKey;
+    }
+    
+    // Preserve registries if not provided or empty in manual save
+    if (!newSettings.registries || newSettings.registries.length === 0) {
+        newSettings.registries = currentSettings.registries;
+    }
+
+    // Sync YOLO mode if provided
+    if (newSettings.isYoloMode !== undefined) {
+        isYoloMode = newSettings.isYoloMode;
     }
     
     saveSettings(newSettings);
