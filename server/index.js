@@ -275,11 +275,26 @@ app.get('/api/stats', async (req, res) => {
         // IP
         const interfaces = os.networkInterfaces();
         let ipAddress = '127.0.0.1';
+        const ipv4Interfaces = [];
         for (const name of Object.keys(interfaces)) {
             for (const iface of interfaces[name] || []) {
-                if (!iface.internal && iface.family === 'IPv4') { ipAddress = iface.address; break; }
+                if (!iface.internal && iface.family === 'IPv4') {
+                    ipv4Interfaces.push({ name, address: iface.address });
+                }
             }
-            if (ipAddress !== '127.0.0.1') break;
+        }
+
+        if (ipv4Interfaces.length > 0) {
+            // Priority: physical > virtual
+            ipv4Interfaces.sort((a, b) => {
+                const isVirtual = (n) => /docker|veth|br-|utun|bridge|vbox|vmnet/i.test(n);
+                const aV = isVirtual(a.name);
+                const bV = isVirtual(b.name);
+                if (aV && !bV) return 1;
+                if (!aV && bV) return -1;
+                return 0;
+            });
+            ipAddress = ipv4Interfaces[0].address;
         }
 
         // Docker
