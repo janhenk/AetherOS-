@@ -7,7 +7,7 @@ import CommandLogs from './components/CommandLogs/CommandLogs';
 import SectorView from './components/SectorView/SectorView';
 import SettingsModal from './components/SettingsModal/SettingsModal';
 import { AuthOverlay } from './components/Auth/AuthOverlay';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppContext } from './context/AppContext';
 
 function AppLayout() {
@@ -45,7 +45,17 @@ function AppLayout() {
 }
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('aetheros_token'));
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      console.warn('Unauthorized access detected. Redirecting to login...');
+      localStorage.removeItem('aetheros_token');
+      setIsAuthenticated(false);
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
 
   return (
     <>

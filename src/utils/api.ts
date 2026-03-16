@@ -6,12 +6,18 @@ export const apiFetch = async (url: string, options: RequestInit = {}): Promise<
     headers.set('Authorization', `Bearer ${token}`);
   }
 
+  console.log(`[apiFetch] Request to: ${url}`, {
+    method: options.method || 'GET',
+    hasToken: !!token
+  });
+
   const response = await fetch(url, {
     ...options,
     headers,
   });
 
   if (response.status === 401) {
+    console.error(`[apiFetch] 401 Unauthorized for ${url}`);
     // Dispatch an event so the Auth Overlay can catch it and force a re-login
     window.dispatchEvent(new Event('auth:unauthorized'));
   }

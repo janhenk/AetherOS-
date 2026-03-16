@@ -36,13 +36,6 @@ export const AuthOverlay: React.FC<{ onAuthenticated: () => void }> = ({ onAuthe
         };
 
         checkStatus();
-
-        const handleUnauthorized = () => {
-             localStorage.removeItem('aetheros_token');
-             setNeedsSetup(false);
-        };
-        window.addEventListener('auth:unauthorized', handleUnauthorized);
-        return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
     }, [onAuthenticated]);
 
     const handleSubmit = async (e: React.FormEvent) => {
