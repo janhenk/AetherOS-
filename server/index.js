@@ -712,9 +712,55 @@ app.post('/api/docker/compose-deploy', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/docker/registry/login', async (req, res) => {
+    try {
+        const { server, username, password } = req.body;
+        if (!server || !username || !password) return res.status(400).json({ error: 'Server, username, and password required' });
+
+        // Execute docker login
+        // Use stdin to pass password securely
+        const loginCmd = `docker login ${server} -u ${username} --password-stdin`;
+        const { exec } = require('child_process');
+        const child = exec(loginCmd, (error) => {
+            if (error) {
+                auditLog('SYSTEM', 'REGISTRY_LOGIN_FAILED', { server, username, error: error.message }, false);
+                return res.status(500).json({ error: error.message });
+            }
+            
+            // Persist registry info (without password)
+            const settings = getSettings();
+            if (!settings.registries) settings.registries = [];
+            const existingIdx = settings.registries.findIndex(r => r.server === server);
+            if (existingIdx !== -1) {
+                settings.registries[existingIdx] = { server, username };
+            } else {
+                settings.registries.push({ server, username });
+            }
+            saveSettings(settings);
+            
+            auditLog('SYSTEM', 'REGISTRY_LOGIN_SUCCESS', { server, username }, true);
+            res.json({ success: true });
+        });
+
+        child.stdin.write(password);
+        child.stdin.end();
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/docker/create', async (req, res) => {
     try {
-        const { image, name, ports, volumes, env, resources } = req.body;
+        const { image, name, ports, volumes, env, resources, replaceId } = req.body;
+
+        if (replaceId) {
+            try {
+                // Force remove old container if it exists
+                await execPromise(`docker rm -f ${replaceId}`);
+                auditLog('SYSTEM', 'CONTAINER_REPLACEMENT_CLEANUP', { replaceId }, true);
+            } catch (e) {
+                console.warn(`Failed to remove old container ${replaceId}:`, e.message);
+            }
+        }
+
         let cmd = `docker run -d`;
         if (name) cmd += ` --name ${name}`;
         ports?.forEach(p => cmd += ` -p ${p.host}:${p.container}`);
@@ -723,10 +769,12 @@ app.post('/api/docker/create', async (req, res) => {
         if (resources?.cpus) cmd += ` --cpus="${resources.cpus}"`;
         if (resources?.memory) cmd += ` -m "${resources.memory}"`;
         cmd += ` ${image}`;
+        
         const { stdout } = await execPromise(cmd);
         res.json({ success: true, id: stdout.trim() });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
 
 app.post('/api/system/host-update', async (req, res) => {
     try {

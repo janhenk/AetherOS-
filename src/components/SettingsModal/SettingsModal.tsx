@@ -298,6 +298,9 @@ const SettingsModal = memo(function SettingsModal() {
                         </div>
                     </Field>
 
+                    {/* Container Registries */}
+                    <RegistrySection />
+
                     <Field 
                         label="SYSTEM FIRMWARE" 
                         hint="Pull latest updates from GitHub and rebuild AetherOS containers natively."
@@ -392,6 +395,96 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     );
 }
 
+function RegistrySection() {
+    const { state, dispatch } = useAppContext();
+    const [server, setServer] = useState('');
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
+    const [loginResult, setLoginResult] = useState<{ success: boolean; message: string } | null>(null);
+
+    const handleLogin = async () => {
+        setIsLoggingIn(true);
+        setLoginResult(null);
+        try {
+            const res = await apiFetch('/api/docker/registry/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ server, username, password }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setLoginResult({ success: true, message: 'AUTHENTICATION SUCCESSFUL' });
+                // Re-fetch settings to show updated registries
+                const getRes = await apiFetch('/api/config/get');
+                const freshData = await getRes.json();
+                dispatch({ type: 'UPDATE_SETTINGS', payload: freshData });
+                // Reset inputs
+                setServer('');
+                setUsername('');
+                setPassword('');
+            } else {
+                setLoginResult({ success: false, message: data.error || 'AUTHENTICATION FAILED' });
+            }
+        } catch (e: any) {
+            setLoginResult({ success: false, message: e.message });
+        } finally {
+            setIsLoggingIn(false);
+        }
+    };
+
+    return (
+        <Field label="CONTAINER REGISTRIES" hint="Authenticate with private registries like Azure (ACR).">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {state.settings.registries?.map((r, i) => (
+                    <div key={i} style={{ 
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', 
+                        background: 'rgba(255,255,255,0.05)', borderRadius: 4, border: '1px solid #2a2a2a'
+                    }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 18, color: 'var(--lcars-sage)' }}>database</span>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: 'white' }}>{r.server}</div>
+                            <div style={{ fontSize: 9, color: '#666' }}>LOGGED IN AS: {r.username}</div>
+                        </div>
+                        <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#444' }}>verified</span>
+                    </div>
+                ))}
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4, padding: 12, border: '1px dashed #2a2a2a', borderRadius: 6 }}>
+                    <input 
+                        type="text" value={server} onChange={e => setServer(e.target.value)} 
+                        placeholder="Registry Server (e.g. myacr.azurecr.io)" style={inputStyle}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <input 
+                            type="text" value={username} onChange={e => setUsername(e.target.value)} 
+                            placeholder="Username" style={{ ...inputStyle, flex: 1 }}
+                        />
+                        <input 
+                            type="password" value={password} onChange={e => setPassword(e.target.value)} 
+                            placeholder="Password / Secret" style={{ ...inputStyle, flex: 1 }}
+                        />
+                    </div>
+                    <button 
+                        onClick={handleLogin} disabled={isLoggingIn || !server || !username || !password}
+                        style={{ ...pillBtnStyle, background: 'var(--lcars-sage)', color: '#141414', fontWeight: 700, width: '100%', marginTop: 4 }}
+                    >
+                        {isLoggingIn ? 'AUTHENTICATING...' : 'IDENTIFY & AUTHENTICATE ◈'}
+                    </button>
+                    {loginResult && (
+                        <div style={{ 
+                            fontSize: 10, textAlign: 'center', fontWeight: 700, 
+                            color: loginResult.success ? 'var(--lcars-sage)' : '#ff4444' 
+                        }}>
+                            {loginResult.message}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </Field>
+    );
+}
+
 const inputStyle: React.CSSProperties = {
     width: '100%',
     background: '#050505',
@@ -417,3 +510,4 @@ const pillBtnStyle: React.CSSProperties = {
 };
 
 export default SettingsModal;
+

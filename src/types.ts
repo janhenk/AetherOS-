@@ -24,6 +24,7 @@ export interface Settings {
     model: GeminiModel;
     temperature: number;
     isSandboxNetworkEnabled?: boolean;
+    registries?: { server: string; username: string }[];
 }
 
 export interface SessionMetrics {

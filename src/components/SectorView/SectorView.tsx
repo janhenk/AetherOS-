@@ -164,21 +164,20 @@ export default function SectorView() {
     };
 
     const handleContainerSubmit = async (spec: DockerCreateSpec) => {
-        // If we were editing, delete the old one first
-        if (editingContainerSpec && editingContainerSpec.name && spec.name === editingContainerSpec.name) {
+        let replaceId: string | undefined = undefined;
+
+        // If we were editing, we want to replace the old one
+        if (editingContainerSpec && editingContainerSpec.name) {
             const oldContainer = containers.find(c => c.name === editingContainerSpec.name || c.name === '/' + editingContainerSpec.name);
             if (oldContainer) {
-                await fetch('/api/docker/action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: oldContainer.id, action: 'rm' })
-                });
+                replaceId = oldContainer.id;
             }
         }
+
         await fetch('/api/docker/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(spec)
+            body: JSON.stringify({ ...spec, replaceId })
         });
     };
     // No more activeScenario or gameState checks needed.
