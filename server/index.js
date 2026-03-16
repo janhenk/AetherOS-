@@ -798,6 +798,26 @@ app.post('/api/docker/create', async (req, res) => {
 });
 
 
+app.get('/api/system/check-updates', async (req, res) => {
+    try {
+        await execPromise('git fetch origin main');
+        const { stdout } = await execPromise('git rev-list HEAD...origin/main --count');
+        const count = parseInt(stdout.trim(), 10);
+        res.json({ success: true, updateAvailable: count > 0, behindCount: count });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/system/update', async (req, res) => {
+    try {
+        const updaterResponse = await fetch('http://aetheros-updater:8080/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await updaterResponse.json();
+        res.json({ success: true, message: data.status || 'Update initiated.' });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/system/host-update', async (req, res) => {
     try {
         const { action } = req.body;

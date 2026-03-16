@@ -16,7 +16,7 @@ const AgentCard = memo(function AgentCard({ agentId }: { agentId: AgentId }) {
     const agent = getAgent(agentId, state.settings.agentOverrides);
     const isActive = state.activeAgent === agentId;
     const status = state.agentStatus[agentId];
-    const msgCount = state.conversations[agentId].length;
+    const msgCount = state.conversations[agentId]?.length || 0;
 
     const handleSelect = useCallback(() => {
         dispatch({ type: 'SELECT_AGENT', payload: agentId });
