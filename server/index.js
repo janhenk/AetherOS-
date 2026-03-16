@@ -749,7 +749,6 @@ app.post('/api/docker/registry/login', async (req, res) => {
         // Execute docker login
         // Use stdin to pass password securely
         const loginCmd = `docker login ${server} -u ${username} --password-stdin`;
-        const { exec } = require('child_process');
         const child = exec(loginCmd, (error) => {
             if (error) {
                 auditLog('SYSTEM', 'REGISTRY_LOGIN_FAILED', { server, username, error: error.message }, false);
