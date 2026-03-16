@@ -8,6 +8,7 @@ import TerminalModal from '../Terminal/TerminalModal';
 import AdvancedDeploymentModal from '../DockerManager/AdvancedDeploymentModal';
 import { TacticalAlerts } from '../TacticalAlerts/TacticalAlerts';
 import type { DockerCreateSpec } from '../../types';
+import pkg from '../../../package.json';
 
 function ApprovalPanel() {
     const { state, dispatch } = useAppContext();
@@ -203,7 +204,10 @@ export default function SectorView() {
                             </div>
                             <div className="border-l border-primary/20 pl-6">
                                 <p className="text-[10px] uppercase tracking-widest text-primary">OS / Kernel</p>
-                                <p className="text-sm font-bold text-slate-200 tracking-wide mt-1">{osInfo}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <p className="text-sm font-bold text-slate-200 tracking-wide">{osInfo}</p>
+                                    <span className="text-[10px] bg-primary/10 text-primary/70 border border-primary/20 px-1.5 rounded font-mono">v{pkg.version}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
