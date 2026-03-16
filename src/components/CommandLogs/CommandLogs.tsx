@@ -99,7 +99,7 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
             </div>
 
             <div className="flex-1 space-y-4 font-mono text-sm leading-relaxed text-white/70 overflow-y-auto pr-2 mb-4">
-                {messages.length === 0 ? (
+                {(messages || []).length === 0 ? (
                     <p className="opacity-50">Log initialized. Awaiting input...</p>
                 ) : (
                     messages.map((msg) => {

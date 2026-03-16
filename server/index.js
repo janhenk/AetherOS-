@@ -48,6 +48,13 @@ let isYoloMode = false;
 
 // --- Security Constants ---
 const COMMAND_DENYLIST = ['rm -rf /', 'mkfs', 'dd', 'shutdown', 'reboot', 'format'];
+
+async function isGitAvailable() {
+    try {
+        await execPromise('git --version');
+        return true;
+    } catch { return false; }
+}
 const WORKSPACE_ROOT = path.resolve(process.cwd(), 'aetheros', 'workspace');
 
 // Ensure directories exist
@@ -800,6 +807,9 @@ app.post('/api/docker/create', async (req, res) => {
 
 app.get('/api/system/check-updates', async (req, res) => {
     try {
+        if (!(await isGitAvailable())) {
+            return res.json({ success: false, output: "System check failed: 'git' core missing from environment.", updateAvailable: false });
+        }
         await execPromise('git fetch origin main');
         const { stdout } = await execPromise('git rev-list HEAD...origin/main --count');
         const count = parseInt(stdout.trim(), 10);
@@ -809,6 +819,9 @@ app.get('/api/system/check-updates', async (req, res) => {
 
 app.post('/api/system/update', async (req, res) => {
     try {
+        if (!(await isGitAvailable())) {
+             return res.status(503).json({ error: "System update impossible: 'git' environment required." });
+        }
         const updaterResponse = await fetch('http://aetheros-updater:8080/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -824,6 +837,9 @@ app.post('/api/system/host-update', async (req, res) => {
         console.log(`[System] Executing host update action: ${action || 'check'}`);
 
         if (action === 'start') {
+            if (!(await isGitAvailable())) {
+                return res.status(503).json({ error: "System update impossible: 'git' environment required." });
+            }
             console.log('Initiating AetherOS update sequence...');
             // In production (Docker), we notify the updater service
             try {

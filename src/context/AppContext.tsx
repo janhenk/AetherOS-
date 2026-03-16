@@ -44,7 +44,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
                 conversations: {
                     ...state.conversations,
                     [action.payload.agentId]: [
-                        ...state.conversations[action.payload.agentId],
+                        ...(state.conversations[action.payload.agentId] || []),
                         action.payload,
                     ],
                 },
@@ -56,7 +56,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
                 ...state,
                 conversations: {
                     ...state.conversations,
-                    [agentId]: state.conversations[agentId].map((msg) =>
+                    [agentId]: (state.conversations[agentId] || []).map((msg: any) =>
                         msg.id === id ? { ...msg, content: msg.content + chunk } : msg
                     ),
                 },
@@ -121,7 +121,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         case 'INITIALIZE_CONVERSATIONS':
             return {
                 ...state,
-                conversations: action.payload
+                conversations: action.payload || INITIAL_STATE.conversations
             };
         case 'SET_YOLO_MODE':
             return { ...state, isYoloMode: action.payload };
