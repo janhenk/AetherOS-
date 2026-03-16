@@ -189,7 +189,7 @@ export default function SectorView() {
                 <div
                     className="absolute inset-0 z-0 animate-pan-slow opacity-60"
                     style={{
-                        backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuD6bA-SkBGBbipJbrOkV4CYIX82VKeiPPZs4jVW3V5lWCmJq2tJjj2E3KmG_jcFb9pJ7yRtEGDazEmbB6wvVsEFL2AjP1QP55-QGidDR3gUrOkZVFxQkr9Um52gzaXMqqqLxJc7uPBefHawwb7Xy4BzpFqWSFSMShoAPw-_oHdIgBd49Sm1VOoZRw5AQexfqHc4sAi1rkGydCRE_iNKj2TEMaELpdv2GsmdiUDgfgwLawRP51lzOkxKRkGEBmVzyqmS3iypS9LSNpk7')",
+                        backgroundImage: "url('/nebula_grid.png')",
                         backgroundSize: '120% 120%'
                     }}
                 ></div>

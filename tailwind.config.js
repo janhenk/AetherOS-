@@ -8,10 +8,10 @@ export default {
     theme: {
         extend: {
             colors: {
-                "primary": "#13c8ec",
-                "secondary": "#a855f7",
+                "primary": "var(--lcars-primary)",
+                "secondary": "var(--lcars-secondary)",
                 "background-light": "#f6f8f8",
-                "background-dark": "#101f22",
+                "background-dark": "var(--lcars-bg)",
             },
             fontFamily: {
                 "display": ["Spline Sans", "sans-serif"]

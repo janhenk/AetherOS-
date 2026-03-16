@@ -2,10 +2,12 @@
   --lcars-primary: #34d3f3;
   --lcars-secondary: #c084fc;
   --lcars-accent: #fcd34d;
-  --lcars-bg: #0a0a0f;
+  --lcars-bg: #0a0e12;
   --lcars-text: #e2e8f0;
   --lcars-text-dim: #94a3b8;
   --lcars-sage: #94fde1;
+  --alert-red: #8b0000;
+  --alert-red-glow: rgba(139, 0, 0, 0.4);
 }
 
 @tailwind base;
@@ -28,16 +30,24 @@
   }
 
   .incursion-alert {
-    --lcars-primary: #ff0000 !important;
-    --lcars-secondary: #000000 !important;
-    --lcars-accent: #cc0000 !important;
-    background: #0a0000 !important;
-    color: #ff3333 !important;
+    --lcars-primary: var(--alert-red) !important;
+    --lcars-secondary: #1a0000 !important;
+    --lcars-accent: #660000 !important;
+    --lcars-bg: #050000 !important;
+    background: var(--lcars-bg) !important;
+    color: #ffbaba !important;
+    animation: alert-pulse 4s ease-in-out infinite;
   }
 
   .incursion-alert .glass-panel {
-    background: rgba(255, 0, 0, 0.05) !important;
-    border-color: rgba(255, 0, 0, 0.2) !important;
+    background: rgba(139, 0, 0, 0.1) !important;
+    border-color: rgba(139, 0, 0, 0.3) !important;
+    backdrop-filter: blur(20px) !important;
+  }
+
+  @keyframes alert-pulse {
+    0%, 100% { background: #050000; }
+    50% { background: #120000; }
   }
 }
 

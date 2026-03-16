@@ -28,6 +28,8 @@ example-store/**
 composed-apps/**
 chat_history.json
 server/stores.json
+server/settings.json
+server/auth_keys.json
 *.trace.db
 *.lock.db
 
