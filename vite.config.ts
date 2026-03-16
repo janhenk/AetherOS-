@@ -618,8 +618,8 @@ const apiPlugin = () => {
         if (req.method !== 'GET') { res.statusCode = 405; return res.end(); }
         try {
           // Perform git fetch to see if there are updates
-          await execPromise('git fetch origin master');
-          const { stdout } = await execPromise('git rev-list HEAD...origin/master --count');
+          await execPromise('git fetch origin main');
+          const { stdout } = await execPromise('git rev-list HEAD...origin/main --count');
           const count = parseInt(stdout.trim(), 10);
           
           res.setHeader('Content-Type', 'application/json');
@@ -646,7 +646,7 @@ const apiPlugin = () => {
             
             // 1. Pull latest code
             console.log('Step 1: PULLING DATA CORES (git pull)...');
-            await execPromise('git pull origin master');
+            await execPromise('git pull origin main');
             
             // 2. Install dependencies (if needed, though this is risky in dev, usually just pull code)
             // console.log('Step 2: REBUILDING NEURAL NETWORKS (npm install)...');

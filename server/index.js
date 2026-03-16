@@ -802,11 +802,38 @@ app.post('/api/system/host-update', async (req, res) => {
     try {
         const { action } = req.body;
         console.log(`[System] Executing host update action: ${action || 'check'}`);
-        // Simulate a system update check/start
-        const output = IS_WIN 
-            ? "Windows Update: Checking for updates... No critical updates found. System is nominal."
-            : "apt-get: Checking repositories... All packages up to date.";
-        res.json({ success: true, output });
+
+        if (action === 'start') {
+            console.log('Initiating AetherOS update sequence...');
+            // In production (Docker), we notify the updater service
+            try {
+                const updaterResponse = await fetch('http://aetheros-updater:8080/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                const data = await updaterResponse.json();
+                res.json({ success: true, output: data.status || 'Update initiated. System core will rebuild.' });
+            } catch (e) {
+                console.error('Updater service unreachable:', e.message);
+                res.status(503).json({ error: 'System updater service is currently offline or unreachable.' });
+            }
+        } else {
+            // Check for updates
+            await execPromise('git fetch origin main');
+            const { stdout } = await execPromise('git rev-list HEAD...origin/main --count');
+            const count = parseInt(stdout.trim(), 10);
+            
+            const output = count > 0 
+                ? `Update identified: ${count} delta segments behind origin/main. Recommendation: Initiate system update.`
+                : "System status: Nominal. All core modules are at latest version.";
+
+            res.json({ 
+                success: true, 
+                output,
+                updateAvailable: count > 0,
+                behindCount: count
+            });
+        }
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
