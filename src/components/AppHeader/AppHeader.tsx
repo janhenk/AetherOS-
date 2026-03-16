@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useAppContext } from '../../context/AppContext';
 import type { AgentId } from '../../types';
 
 interface AppHeaderProps {
@@ -8,6 +9,9 @@ interface AppHeaderProps {
 }
 
 const AppHeader = memo(function AppHeader({ activeAgent, setActiveAgent, onSettingsClick }: AppHeaderProps) {
+    const { state } = useAppContext();
+    const version = state.serverState?.projectVersion || '1.0.4';
+
     return (
         <header className="sticky top-0 z-50 flex items-center justify-between border-b border-primary/10 bg-background-dark/80 px-8 py-4 backdrop-blur-md">
             <div className="flex items-center gap-4">
@@ -15,7 +19,7 @@ const AppHeader = memo(function AppHeader({ activeAgent, setActiveAgent, onSetti
                     <span className="material-symbols-outlined text-2xl">rocket_launch</span>
                 </div>
                 <div>
-                    <h2 className="text-lg font-bold tracking-tight text-slate-100">AetherOS <span className="text-primary/70 font-light">v1.0.4</span></h2>
+                    <h2 className="text-lg font-bold tracking-tight text-slate-100">AetherOS <span className="text-primary/70 font-light">v{version}</span></h2>
                     <p className="text-[10px] uppercase tracking-[0.2em] text-primary/50">Utopian Starship Interface</p>
                 </div>
             </div>
