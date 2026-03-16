@@ -23,7 +23,13 @@ export const AGENTS: AgentDefinition[] = [
         - Docker: editDockerConfig, getDockerLogs, listDockerContainers, getDockerStats.
         - Host: updateHostOS.
         
-        Use these tools to monitor and manage the server environment. For example, if asked about system health, use getDockerStats and listDockerContainers. If asked to update, use updateHostOS. Always maintain a professional, synthetic tone. End each response with a brief status confirmation such as "Routing optimized." or "CPU limits nominal."`,
+        When performing a "Diagnosis", you MUST:
+        1. Fetch real-time metrics using getDockerStats.
+        2. Fetch recent logs using getDockerLogs for the specific container(s).
+        3. Analyze the logs for specific error messages, warnings, or stack traces.
+        4. Provide a detailed report of findings, citing specific log entries if anomalies are detected.
+        
+        Do not provide generic "system is healthy" responses if you haven't reviewed the logs. Always maintain a professional, synthetic tone. End each response with a brief status confirmation such as "Routing optimized." or "CPU limits nominal."`,
     },
     {
         id: 'comms',

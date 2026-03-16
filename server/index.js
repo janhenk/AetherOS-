@@ -217,32 +217,87 @@ app.post('/api/ai/chat', async (req, res) => {
         }
 
         const client = new GoogleGenAI({ apiKey: settings.apiKey });
-        const chat = client.chats.create({
+        const model = client.getGenerativeModel({ 
             model: settings.model,
-            config: {
-                temperature: settings.temperature,
-                systemInstruction,
-                tools
-            }
+            systemInstruction
         });
 
-        // Convert messages to history and current message
-        // The project's SDK expects messages in sendMessageStream or history?
-        // Let's assume sendMessageStream handles the context if we pass it correctly,
-        // but useGemini.ts seems to rely on the 'chat' object maintaining state.
-        // For a stateless proxy, we should probably pass the whole history or state.
-        // Wait, useGemini.ts creates a NEW chat object if none exists.
-        
-        const userMessage = messages[messages.length - 1].content;
-        const result = await chat.sendMessageStream({ message: userMessage });
+        // Reconstruct history
+        const history = [];
+        // The last message is the current user prompt, all others go into history
+        const conversationContext = messages.slice(0, -1);
+        const lastUserMsg = messages[messages.length - 1];
+
+        for (const msg of conversationContext) {
+            if (msg.role === 'user') {
+                history.push({ role: 'user', parts: [{ text: msg.content }] });
+            } else if (msg.role === 'agent') {
+                if (msg.content.startsWith('TOOL_RESPONSE:')) {
+                    const parts = msg.content.split(':');
+                    const name = parts[1];
+                    const response = JSON.parse(parts.slice(2).join(':'));
+                    history.push({
+                        role: 'user', // In chat sessions, function responses are sent from the 'user' side
+                        parts: [{
+                            functionResponse: {
+                                name,
+                                response
+                            }
+                        }]
+                    });
+                } else if (msg.content.startsWith('TOOL_ERROR:')) {
+                    const parts = msg.content.split(':');
+                    const name = parts[1];
+                    const error = parts.slice(2).join(':');
+                    history.push({
+                        role: 'user',
+                        parts: [{
+                            functionResponse: {
+                                name,
+                                response: { error }
+                            }
+                        }]
+                    });
+                } else {
+                    const parts = [];
+                    if (msg.content) parts.push({ text: msg.content });
+                    
+                    // Add previous tool calls if they exist
+                    if (msg.toolCalls && msg.toolCalls.length > 0) {
+                        msg.toolCalls.forEach(call => {
+                            parts.push({
+                                functionCall: {
+                                    name: call.name,
+                                    args: call.args
+                                }
+                            });
+                        });
+                    }
+                    
+                    if (parts.length > 0) {
+                        history.push({ role: 'model', parts });
+                    }
+                }
+            }
+        }
+
+        const chat = model.startChat({
+            history,
+            generationConfig: {
+                temperature: settings.temperature,
+            },
+            tools
+        });
+
+        const result = await chat.sendMessageStream(lastUserMsg.content);
         
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        for await (const chunk of result) {
-            const chunkText = chunk.text;
-            const functionCalls = chunk.functionCalls;
+        for await (const chunk of result.stream) {
+            const chunkText = chunk.text();
+            const functionCalls = chunk.functionCalls();
             
             const responseData = {
                 text: chunkText,
