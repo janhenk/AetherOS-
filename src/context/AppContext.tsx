@@ -51,13 +51,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
             };
 
         case 'UPDATE_STREAMING_MESSAGE': {
-            const { agentId, id, chunk } = action.payload;
+            const { agentId, id, chunk, toolCalls } = action.payload as any;
+            const targetAgentId = agentId as AgentId;
             return {
                 ...state,
                 conversations: {
                     ...state.conversations,
-                    [agentId]: (state.conversations[agentId] || []).map((msg: any) =>
-                        msg.id === id ? { ...msg, content: msg.content + chunk } : msg
+                    [targetAgentId]: (state.conversations[targetAgentId] || []).map((msg: any) =>
+                        msg.id === id ? { 
+                            ...msg, 
+                            content: chunk ? msg.content + chunk : msg.content,
+                            toolCalls: toolCalls ? [...(msg.toolCalls || []), ...toolCalls] : msg.toolCalls
+                        } : msg
                     ),
                 },
             };

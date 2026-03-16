@@ -44,6 +44,16 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
     const bottomRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [text, setText] = useState('');
+    const [expandedToolIds, setExpandedToolIds] = useState<Set<string>>(new Set());
+
+    const toggleToolExpand = (id: string) => {
+        setExpandedToolIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     // Auto-scroll
     useEffect(() => {
@@ -107,17 +117,47 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                         if (msg.role === 'user') colorClass = 'text-secondary/60';
                         if (msg.role === 'agent' && msg.content.includes('[MAIN VIEWSCREEN]')) colorClass = 'text-emerald-500/60';
 
+                        const isExpanded = expandedToolIds.has(msg.id);
+
                         return (
-                            <div key={msg.id} className="flex gap-3">
-                                <span className={`shrink-0 mt-1 ${colorClass}`}>{formatTimestamp(msg.timestamp)}</span>
-                                <span className={`flex-1 overflow-hidden ${msg.role === 'user' ? 'text-white/90' : 'text-white/70'}`}>
-                                    <ReactMarkdown
-                                        remarkPlugins={MARKDOWN_PLUGINS}
-                                        components={MARKDOWN_COMPONENTS}
-                                    >
-                                        {msg.content}
-                                    </ReactMarkdown>
-                                </span>
+                            <div key={msg.id} className="flex flex-col gap-1">
+                                <div className="flex gap-3">
+                                    <span className={`shrink-0 mt-1 ${colorClass}`}>{formatTimestamp(msg.timestamp)}</span>
+                                    <div className={`flex-1 overflow-hidden flex flex-col gap-2 ${msg.role === 'user' ? 'text-white/90' : 'text-white/70'}`}>
+                                        <ReactMarkdown
+                                            remarkPlugins={MARKDOWN_PLUGINS}
+                                            components={MARKDOWN_COMPONENTS}
+                                        >
+                                            {msg.content}
+                                        </ReactMarkdown>
+
+                                        {msg.toolCalls && msg.toolCalls.length > 0 && (
+                                            <div className="flex flex-col gap-2 my-1">
+                                                <button 
+                                                    onClick={() => toggleToolExpand(msg.id)}
+                                                    className="flex items-center gap-2 self-start rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter text-primary border border-primary/20 hover:bg-primary/20 transition-all"
+                                                >
+                                                    <span className="material-symbols-outlined text-xs">settings_input_component</span>
+                                                    {msg.toolCalls.length} Tool Operations
+                                                    <span className="material-symbols-outlined text-xs">{isExpanded ? 'expand_less' : 'expand_more'}</span>
+                                                </button>
+                                                
+                                                {isExpanded && (
+                                                    <div className="flex flex-col gap-2 pl-2 border-l border-primary/20 bg-black/20 rounded-r py-2 pr-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                                                        {msg.toolCalls.map((call: any, i: number) => (
+                                                            <div key={i} className="text-[10px] font-mono">
+                                                                <div className="text-secondary opacity-80 mb-0.5">λ {call.name}</div>
+                                                                <pre className="bg-primary/5 p-1 rounded text-[9px] text-primary/70 overflow-x-auto border border-primary/5">
+                                                                    {JSON.stringify(call.args, null, 2)}
+                                                                </pre>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         );
                     })

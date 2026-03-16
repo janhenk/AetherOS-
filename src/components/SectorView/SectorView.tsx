@@ -121,7 +121,7 @@ export default function SectorView() {
     const handleStartDocker = async () => {
         setIsProcessing('docker-start');
         try {
-            await fetch('/api/docker/start-service', { method: 'POST' });
+            await apiFetch('/api/docker/start-service', { method: 'POST' });
         } catch (err) {
             console.error(err);
         } finally {
@@ -151,7 +151,7 @@ export default function SectorView() {
     const handleDockerAction = async (id: string, action: string) => {
         try {
             setIsProcessing(id);
-            await fetch('/api/docker/action', {
+            await apiFetch('/api/docker/action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id, action })
@@ -174,7 +174,7 @@ export default function SectorView() {
             }
         }
 
-        await fetch('/api/docker/create', {
+        await apiFetch('/api/docker/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...spec, replaceId })

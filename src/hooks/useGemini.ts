@@ -39,6 +39,7 @@ export function useGemini() {
                 content: '',
                 timestamp: new Date(),
                 isStreaming: true,
+                toolCalls: [],
             };
             dispatch({ type: 'ADD_MESSAGE', payload: agentMsg });
             dispatch({ type: 'SET_AGENT_STATUS', payload: { agentId, status: 'processing' } });
@@ -219,6 +220,10 @@ export function useGemini() {
                                     }
                                     if (data.functionCalls && data.functionCalls.length > 0) {
                                         functionCallsToExecute.push(...data.functionCalls);
+                                        dispatch({
+                                            type: 'UPDATE_STREAMING_MESSAGE',
+                                            payload: { agentId, id: agentMsgId, toolCalls: data.functionCalls } as any
+                                        });
                                     }
                                 } catch (e) { /* ignore parse errors in stream */ }
                             }

@@ -16,6 +16,7 @@ export interface Message {
     content: string;
     timestamp: Date;
     isStreaming?: boolean;
+    toolCalls?: any[];
 }
 
 export interface Settings {
