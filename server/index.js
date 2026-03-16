@@ -341,12 +341,16 @@ app.get('/api/stats', async (req, res) => {
             });
         } catch (e) { }
 
+        // Version
+        const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
+
         res.json({
             cpuLoad, ramUsed, storageUsed: cachedStorage, containers,
             deployments: activeDeployments, ipAddress, dockerRunning,
             hostname: os.hostname(), osInfo: `${os.type()} ${os.release()}`,
             networkInbound, networkOutbound,
-            insights: tacticalInsights
+            insights: tacticalInsights,
+            projectVersion: pkg.version
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });

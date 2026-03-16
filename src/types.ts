@@ -106,6 +106,7 @@ export interface ServerState {
     networkOutbound?: number;
     deployments: { id: string; name: string; status: string }[];
     insights: TacticalInsight[];
+    projectVersion?: string;
 }
 
 
