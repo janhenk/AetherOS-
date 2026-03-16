@@ -91,11 +91,20 @@ setInterval(updateStorage, 60000);
 // --- Settings Management ---
 function getSettings() {
     if (!fs.existsSync(SETTINGS_FILE)) {
-        return { apiKey: '', model: 'gemini-2.0-flash', temperature: 0.7, isSandboxNetworkEnabled: false, isYoloMode: false, registries: [] };
+        return { 
+            apiKey: '', 
+            model: 'gemini-2.0-flash', 
+            temperature: 0.7, 
+            isSandboxNetworkEnabled: false, 
+            isYoloMode: false, 
+            registries: [],
+            agentOverrides: {}
+        };
     }
     const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
     if (settings.isYoloMode === undefined) settings.isYoloMode = false;
     if (settings.registries === undefined) settings.registries = [];
+    if (settings.agentOverrides === undefined) settings.agentOverrides = {};
     return settings;
 }
 

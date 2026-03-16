@@ -1,7 +1,7 @@
 import React, { memo, useState, useCallback } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import { getAllAgents } from '../../agents';
 import { apiFetch } from '../../utils/api';
-import { AGENTS } from '../../agents';
 import type { GeminiModel, Settings } from '../../types';
 
 const MODELS: { id: GeminiModel; label: string; tag?: string }[] = [
@@ -221,23 +221,73 @@ const SettingsModal = memo(function SettingsModal() {
                     </Field>
 
                     {/* Agent system prompts preview */}
-                    <Field label="AGENT SYSTEM PROMPTS">
-                        {AGENTS.map((a) => (
-                            <details key={a.id} style={{ marginBottom: 6 }}>
+                    <Field label="AGENT CUSTOMIZATION" hint="Modify system protocols and identifiers for specialized AIs.">
+                        {getAllAgents(localSettings.agentOverrides).map((a) => (
+                            <details key={a.id} style={{ marginBottom: 12, border: '1px solid #1a1a1a', borderRadius: 4, padding: '4px 8px' }}>
                                 <summary style={{
                                     fontFamily: 'var(--font-display)', fontSize: 11,
                                     letterSpacing: '0.1em', color: a.color,
-                                    cursor: 'pointer', padding: '4px 0',
+                                    cursor: 'pointer', padding: '8px 0',
+                                    display: 'flex', alignItems: 'center'
                                 }}>
-                                    <span className="material-symbols-outlined" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }}>{a.icon}</span>{a.shortName}
+                                    <span className="material-symbols-outlined" style={{ fontSize: 16, verticalAlign: 'middle', marginRight: 8 }}>{a.icon}</span>
+                                    <span style={{ fontWeight: 700 }}>{a.shortName}</span>
+                                    <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 8 }}>({a.name})</span>
                                 </summary>
-                                <div style={{
-                                    fontFamily: 'var(--font-mono)', fontSize: 11, color: '#666',
-                                    padding: '8px', marginTop: 4, background: '#050505',
-                                    borderLeft: `2px solid ${a.color}`, borderRadius: 4,
-                                    lineHeight: 1.6,
-                                }}>
-                                    {a.systemPrompt}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '8px 4px 12px 4px' }}>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: 9, color: '#444', marginBottom: 4 }}>PROTOCOL NAME</div>
+                                            <input 
+                                                type="text" 
+                                                value={a.shortName} 
+                                                onChange={(e) => setLocalSettings(s => ({
+                                                    ...s,
+                                                    agentOverrides: {
+                                                        ...s.agentOverrides,
+                                                        [a.id]: { ...(s.agentOverrides?.[a.id] || {}), shortName: e.target.value }
+                                                    }
+                                                }))}
+                                                style={{ ...inputStyle, padding: '6px 10px', fontSize: 11 }}
+                                            />
+                                        </div>
+                                        <div style={{ flex: 2 }}>
+                                            <div style={{ fontSize: 9, color: '#444', marginBottom: 4 }}>FULL DESIGNATION</div>
+                                            <input 
+                                                type="text" 
+                                                value={a.name} 
+                                                onChange={(e) => setLocalSettings(s => ({
+                                                    ...s,
+                                                    agentOverrides: {
+                                                        ...s.agentOverrides,
+                                                        [a.id]: { ...(s.agentOverrides?.[a.id] || {}), name: e.target.value }
+                                                    }
+                                                }))}
+                                                style={{ ...inputStyle, padding: '6px 10px', fontSize: 11 }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: 9, color: '#444', marginBottom: 4 }}>SYSTEM INSTRUCTIONS</div>
+                                        <textarea 
+                                            value={a.systemPrompt} 
+                                            onChange={(e) => setLocalSettings(s => ({
+                                                ...s,
+                                                agentOverrides: {
+                                                    ...s.agentOverrides,
+                                                    [a.id]: { ...(s.agentOverrides?.[a.id] || {}), systemPrompt: e.target.value }
+                                                }
+                                            }))}
+                                            style={{ 
+                                                ...inputStyle, 
+                                                height: 120, 
+                                                resize: 'vertical', 
+                                                fontSize: 11, 
+                                                lineHeight: 1.5,
+                                                fontFamily: 'var(--font-mono)'
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             </details>
                         ))}

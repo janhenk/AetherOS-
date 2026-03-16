@@ -58,5 +58,15 @@ export const AGENTS: AgentDefinition[] = [
     },
 ];
 
-export const getAgent = (id: AgentId): AgentDefinition =>
-    AGENTS.find((a) => a.id === id)!;
+export const getAgent = (id: AgentId, overrides?: Record<string, any>): AgentDefinition => {
+    const base = AGENTS.find((a) => a.id === id)!;
+    if (!overrides || !overrides[id]) return base;
+    return {
+        ...base,
+        ...overrides[id]
+    };
+};
+
+export const getAllAgents = (overrides?: Record<string, any>): AgentDefinition[] => {
+    return AGENTS.map(a => getAgent(a.id, overrides));
+};

@@ -37,7 +37,7 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
     const { sendMessage } = useGemini();
 
     const { conversations, agentStatus } = state;
-    const agent = getAgent(activeAgent);
+    const agent = getAgent(activeAgent, state.settings.agentOverrides);
     const messages = conversations[activeAgent];
     const isProcessing = agentStatus[activeAgent] === 'processing';
 
@@ -135,7 +135,7 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                 <textarea
                     ref={textareaRef}
                     className="w-full bg-transparent border-none text-sm font-mono text-white/90 focus:ring-0 placeholder-white/20 resize-none py-1"
-                    placeholder={`Transmit to ${agent.name}...`}
+                    placeholder={`Transmit to ${agent.shortName}...`}
                     value={text}
                     onChange={handleChange}
                     onKeyDown={handleKeyDown}

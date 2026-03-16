@@ -18,7 +18,7 @@ export function useGemini() {
 
     const sendMessage = useCallback(
         async (agentId: AgentId, text: string) => {
-            const agentDef = getAgent(agentId);
+            const agentDef = getAgent(agentId, state.settings.agentOverrides);
             
             // Add user message
             const userMsg: Message = {

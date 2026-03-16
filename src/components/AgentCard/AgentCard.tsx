@@ -13,7 +13,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const AgentCard = memo(function AgentCard({ agentId }: { agentId: AgentId }) {
     const { state, dispatch } = useAppContext();
-    const agent = getAgent(agentId);
+    const agent = getAgent(agentId, state.settings.agentOverrides);
     const isActive = state.activeAgent === agentId;
     const status = state.agentStatus[agentId];
     const msgCount = state.conversations[agentId].length;

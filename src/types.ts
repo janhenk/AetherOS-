@@ -26,6 +26,7 @@ export interface Settings {
     isSandboxNetworkEnabled?: boolean;
     registries?: { server: string; username: string }[];
     isYoloMode?: boolean;
+    agentOverrides?: Record<string, { name?: string; shortName?: string; systemPrompt?: string }>;
 }
 
 export interface SessionMetrics {
