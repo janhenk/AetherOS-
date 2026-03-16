@@ -803,6 +803,63 @@ app.post('/api/docker/create', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/docker/action', async (req, res) => {
+    try {
+        const { id, action } = req.body;
+        if (!id || !action) throw new Error('Container ID and action required');
+
+        let cmd = '';
+        switch (action) {
+            case 'start': cmd = `docker start ${id}`; break;
+            case 'stop': cmd = `docker stop ${id}`; break;
+            case 'restart': cmd = `docker restart ${id}`; break;
+            case 'rm': cmd = `docker rm -f ${id}`; break;
+            default: throw new Error(`Unsupported action: ${action}`);
+        }
+
+        await execPromise(cmd);
+        auditLog('SYSTEM', 'DOCKER_ACTION', { id, action }, true);
+        res.json({ success: true, action });
+    } catch (err) { 
+        auditLog('SYSTEM', 'DOCKER_ACTION_FAILED', { id: req.body.id, action: req.body.action, error: err.message }, false);
+        res.status(500).json({ error: err.message }); 
+    }
+});
+
+app.post('/api/docker/inspect', async (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id) throw new Error('Container ID required');
+
+        const { stdout } = await execPromise(`docker inspect ${id} --format "{{json .}}"`);
+        const raw = JSON.parse(stdout);
+        
+        // Map back to our internal DockerCreateSpec format
+        const spec = {
+            image: raw.Config.Image,
+            name: raw.Name.replace(/^\//, ''),
+            ports: Object.entries(raw.HostConfig.PortBindings || {}).map(([c, h]) => ({
+                container: c.split('/')[0],
+                host: h[0]?.HostPort || ''
+            })),
+            volumes: (raw.Mounts || []).map((m) => ({
+                host: m.Source,
+                container: m.Destination
+            })),
+            env: (raw.Config.Env || []).map((e) => {
+                const [key, value] = e.split('=');
+                return { key, value };
+            }),
+            resources: {
+                cpus: (raw.HostConfig.NanoCpus / 1e9).toString(),
+                memory: (raw.HostConfig.Memory / (1024 * 1024)).toString() + 'm'
+            }
+        };
+
+        res.json(spec);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 
 app.get('/api/system/check-updates', async (req, res) => {
     try {
