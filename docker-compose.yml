@@ -25,7 +25,7 @@ services:
     depends_on:
       - docker-socket-proxy
     volumes:
-      - ./chat_history.json:/app/chat_history.json
+      - ./data:/app/data
       - ./example-store:/app/example-store
       - ./composed-apps:/app/composed-apps
     environment:

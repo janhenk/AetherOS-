@@ -10,9 +10,8 @@ dist/
 .gitignore
 
 # AetherOS localized runtime structures
-logs/
+data/
 aetheros/
-chat_history.json
 tsc_errors.txt
 nexus-data/
 

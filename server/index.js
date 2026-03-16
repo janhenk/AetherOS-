@@ -28,8 +28,15 @@ if (fs.existsSync(distPath)) {
 
 const activeDeployments = [];
 const tacticalInsights = [];
-const STORES_FILE = path.join(process.cwd(), 'server', 'stores.json');
-const SETTINGS_FILE = path.join(process.cwd(), 'server', 'settings.json');
+const DATA_DIR = path.join(process.cwd(), 'data');
+const STORES_FILE = path.join(DATA_DIR, 'stores.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const CHAT_FILE = path.join(DATA_DIR, 'chat_history.json');
+const AUDIT_LOG_PATH = path.join(DATA_DIR, 'logs', 'subspace_comms.log');
+
+// Ensure data directory structure exists
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(path.join(DATA_DIR, 'logs'))) fs.mkdirSync(path.join(DATA_DIR, 'logs'), { recursive: true });
 
 let cachedStorage = 50;
 let previousCpus = os.cpus();
@@ -42,11 +49,9 @@ let isYoloMode = false;
 // --- Security Constants ---
 const COMMAND_DENYLIST = ['rm -rf /', 'mkfs', 'dd', 'shutdown', 'reboot', 'format'];
 const WORKSPACE_ROOT = path.resolve(process.cwd(), 'aetheros', 'workspace');
-const AUDIT_LOG_PATH = path.resolve(process.cwd(), 'logs', 'subspace_comms.log');
 
 // Ensure directories exist
 if (!fs.existsSync(WORKSPACE_ROOT)) fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
-if (!fs.existsSync(path.dirname(AUDIT_LOG_PATH))) fs.mkdirSync(path.dirname(AUDIT_LOG_PATH), { recursive: true });
 
 function auditLog(agent, action, params, success) {
     const timestamp = new Date().toISOString();
@@ -629,7 +634,6 @@ app.post('/api/fs/write', (req, res) => {
 });
 
 // Chat Persistence
-const CHAT_FILE = path.join(process.cwd(), 'chat_history.json');
 app.get('/api/chat/load', (req, res) => {
     try { res.json(fs.existsSync(CHAT_FILE) ? JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8')) : {}); }
     catch (err) { res.status(500).json({ error: err.message }); }

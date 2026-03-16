@@ -30,6 +30,7 @@ chat_history.json
 server/stores.json
 server/settings.json
 server/auth_keys.json
+data/
 *.trace.db
 *.lock.db
 
