@@ -1,6 +1,0 @@
-{
-  "apiKey": "AIzaTestProxyKey123",
-  "model": "gemini-2.0-flash",
-  "temperature": 0.7,
-  "isSandboxNetworkEnabled": false
-}
