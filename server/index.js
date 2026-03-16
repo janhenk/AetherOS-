@@ -745,37 +745,53 @@ app.post('/api/docker/compose-deploy', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+async function getPublicIP() {
+    try {
+        const response = await fetch('https://icanhazip.com');
+        const text = await response.text();
+        return text.trim();
+    } catch (e) { return 'Unknown'; }
+}
+
 app.post('/api/docker/registry/login', async (req, res) => {
     try {
         const { server, username, password } = req.body;
         if (!server || !username || !password) return res.status(400).json({ error: 'Server, username, and password required' });
 
-        // Execute docker login
-        // Use stdin to pass password securely
-        const loginCmd = `docker login ${server} -u ${username} --password-stdin`;
-        const child = exec(loginCmd, (error) => {
-            if (error) {
-                auditLog('SYSTEM', 'REGISTRY_LOGIN_FAILED', { server, username, error: error.message }, false);
-                return res.status(500).json({ error: error.message });
-            }
-            
-            // Persist registry info (without password)
-            const settings = getSettings();
-            if (!settings.registries) settings.registries = [];
-            const existingIdx = settings.registries.findIndex(r => r.server === server);
-            if (existingIdx !== -1) {
-                settings.registries[existingIdx] = { server, username };
-            } else {
-                settings.registries.push({ server, username });
-            }
-            saveSettings(settings);
-            
-            auditLog('SYSTEM', 'REGISTRY_LOGIN_SUCCESS', { server, username }, true);
-            res.json({ success: true });
-        });
-
+        // Execute docker login using spawn to pass password securely
+        const child = spawn('docker', ['login', server, '-u', username, '--password-stdin']);
         child.stdin.write(password);
         child.stdin.end();
+
+        let stdout = '', stderr = '';
+        child.stdout.on('data', data => stdout += data.toString());
+        child.stderr.on('data', data => stderr += data.toString());
+
+        child.on('close', async (code) => {
+            if (code === 0) {
+                // Persist registry info (without password)
+                const settings = getSettings();
+                if (!settings.registries) settings.registries = [];
+                const existingIdx = settings.registries.findIndex(r => r.server === server);
+                if (existingIdx !== -1) {
+                    settings.registries[existingIdx] = { server, username };
+                } else {
+                    settings.registries.push({ server, username });
+                }
+                saveSettings(settings);
+                
+                auditLog('SYSTEM', 'REGISTRY_LOGIN_SUCCESS', { server, username }, true);
+                res.json({ success: true });
+            } else {
+                let errorMsg = stderr || stdout;
+                if (errorMsg.includes('403 Forbidden')) {
+                    const publicIP = await getPublicIP();
+                    errorMsg = `Login Failed (403 Forbidden): Your server's public IP [${publicIP}] is likely blocked by Azure Firewall. Please whitelist this IP in the Azure Portal Networking settings for ${server}.`;
+                }
+                auditLog('SYSTEM', 'REGISTRY_LOGIN_FAILED', { server, username, error: errorMsg }, false);
+                res.status(500).json({ error: errorMsg });
+            }
+        });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
