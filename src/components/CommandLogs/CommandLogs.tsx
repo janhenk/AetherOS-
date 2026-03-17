@@ -118,6 +118,41 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                         if (msg.role === 'agent' && msg.content.includes('[MAIN VIEWSCREEN]')) colorClass = 'text-emerald-500/60';
 
                         const isExpanded = expandedToolIds.has(msg.id);
+                        const isToolResult = msg.content.startsWith('TOOL_RESPONSE:') || msg.content.startsWith('TOOL_ERROR:');
+
+                        if (isToolResult) {
+                            const isError = msg.content.startsWith('TOOL_ERROR:');
+                            const prefix = isError ? 'TOOL_ERROR:' : 'TOOL_RESPONSE:';
+                            const remaining = msg.content.slice(prefix.length);
+                            const colonIdx = remaining.indexOf(':');
+                            const toolName = remaining.slice(0, colonIdx);
+                            const resultStr = remaining.slice(colonIdx + 1);
+                            
+                            let parsedResult = resultStr;
+                            try {
+                                const json = JSON.parse(resultStr);
+                                parsedResult = JSON.stringify(json, null, 2);
+                            } catch (e) {
+                                // Not JSON, keep as is
+                            }
+
+                            return (
+                                <div key={msg.id} className="flex flex-col gap-1 border-l-2 border-primary/10 ml-6 pl-4 my-1">
+                                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-tighter font-bold">
+                                        <span className={`material-symbols-outlined text-xs ${isError ? 'text-red-500' : 'text-primary'}`}>
+                                            {isError ? 'error' : 'check_circle'}
+                                        </span>
+                                        <span className={isError ? 'text-red-500/80' : 'text-primary/80'}>
+                                            {toolName} Result
+                                        </span>
+                                        <span className="text-slate-500 font-normal">{formatTimestamp(msg.timestamp)}</span>
+                                    </div>
+                                    <pre className={`text-[10px] p-2 rounded bg-black/40 border ${isError ? 'border-red-500/20 text-red-200/70' : 'border-primary/10 text-primary/60'} overflow-x-auto max-h-40`}>
+                                        {parsedResult}
+                                    </pre>
+                                </div>
+                            );
+                        }
 
                         return (
                             <div key={msg.id} className="flex flex-col gap-1">
@@ -130,6 +165,7 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                                         >
                                             {msg.content}
                                         </ReactMarkdown>
+
 
                                         {msg.toolCalls && msg.toolCalls.length > 0 && (
                                             <div className="flex flex-col gap-2 my-1">

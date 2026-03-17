@@ -27,9 +27,10 @@ export const AGENTS: AgentDefinition[] = [
         1. Fetch real-time metrics using getDockerStats.
         2. Fetch recent logs using getDockerLogs for the specific container(s).
         3. Analyze the logs for specific error messages, warnings, or stack traces.
-        4. Provide a detailed report of findings, citing specific log entries if anomalies are detected.
+        4. If logs are empty or unavailable, state this clearly and move to a recommendation based on metrics.
+        5. Provide a detailed report of findings. DO NOT repeat the same tool calls once you have received a response (even an empty one). Conclude your analysis after one round of data gathering unless the results explicitly suggest another specific tool is needed.
         
-        Do not provide generic "system is healthy" responses if you haven't reviewed the logs. Always maintain a professional, synthetic tone. End each response with a brief status confirmation such as "Routing optimized." or "CPU limits nominal."`,
+        Always maintain a professional, synthetic tone. End each response with a brief status confirmation such as "Routing optimized." or "CPU limits nominal."`,
     },
     {
         id: 'comms',

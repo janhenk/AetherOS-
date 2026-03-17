@@ -217,29 +217,69 @@ app.post('/api/ai/chat', async (req, res) => {
         }
 
         const client = new GoogleGenAI({ apiKey: settings.apiKey });
-        const chat = client.chats.create({
+        
+        // Helper to convert frontend messages to Gemini Content objects
+        const convertToGeminiHistory = (msgs) => {
+            const history = [];
+            for (const msg of msgs) {
+                if (msg.role === 'user') {
+                    history.push({ role: 'user', parts: [{ text: msg.content }] });
+                } else if (msg.role === 'agent') {
+                    const isToolMarker = msg.content.startsWith('TOOL_RESPONSE:') || msg.content.startsWith('TOOL_ERROR:');
+                    
+                    if (isToolMarker) {
+                        // Tool results are attributed to 'user' role in Gemini API
+                        const isError = msg.content.startsWith('TOOL_ERROR:');
+                        const prefix = isError ? 'TOOL_ERROR:' : 'TOOL_RESPONSE:';
+                        const remaining = msg.content.slice(prefix.length);
+                        const colonIdx = remaining.indexOf(':');
+                        const name = remaining.slice(0, colonIdx);
+                        const responseStr = remaining.slice(colonIdx + 1);
+                        
+                        let response;
+                        try { response = JSON.parse(responseStr); } catch (e) { response = { error: responseStr }; }
+                        if (isError) response = { error: response };
+
+                        const lastTurn = history[history.length - 1];
+                        if (lastTurn && lastTurn.role === 'user' && lastTurn.parts.some(p => p.hasOwnProperty('functionResponse'))) {
+                            lastTurn.parts.push({ functionResponse: { name, response } });
+                        } else {
+                            history.push({
+                                role: 'user',
+                                parts: [{ functionResponse: { name, response } }]
+                            });
+                        }
+                    } else {
+                        const parts = [];
+                        if (msg.toolCalls && msg.toolCalls.length > 0) {
+                            for (const fc of msg.toolCalls) {
+                                parts.push({ functionCall: { name: fc.name, args: fc.args } });
+                            }
+                        }
+                        if (msg.content) {
+                            parts.push({ text: msg.content });
+                        }
+                        
+                        if (parts.length > 0) {
+                            history.push({ role: 'model', parts });
+                        }
+                    }
+                }
+            }
+            return history;
+        };
+
+        const history = convertToGeminiHistory(messages);
+
+        const result = await client.models.generateContentStream({
             model: settings.model,
+            contents: history,
             config: {
                 temperature: settings.temperature,
-                systemInstruction,
+                systemInstruction: { parts: [{ text: systemInstruction }] },
                 tools
             }
         });
-
-        // The stateless proxy sends the whole history. 
-        // We need to feed it into the chat session if the SDK supports it,
-        // or just use the last message if we rely on the client state.
-        // However, since this is a stateless proxy, we MUST ensure the history is passed.
-        // For @google/genai v1.44+, we might need to use sendMessageStream with history options.
-        
-        const lastUserMsg = messages[messages.length - 1];
-        
-        // Convert our message format to the SDK's expected history format for reference
-        // Note: The previous version was stateless and actually IGNORED previous history, 
-        // which matches the behavior the user saw before my broken refactor.
-        // Let's restore the working stateless behavior first to get the app back up.
-        
-        const result = await chat.sendMessageStream({ message: lastUserMsg.content });
         
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
@@ -265,6 +305,7 @@ app.post('/api/ai/chat', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 app.get('/api/stats', async (req, res) => {
     try {
@@ -360,36 +401,10 @@ app.get('/api/stats', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/docker/action', async (req, res) => {
-    try {
-        const { id, action } = req.body;
-        let cmd = `docker ${action} ${id}`;
-        if (action === 'rm') cmd = `docker rm -f ${id}`;
-        await execPromise(cmd);
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.post('/api/docker/inspect', async (req, res) => {
-    try {
-        const { id } = req.body;
-        const { stdout } = await execPromise(`docker inspect ${id}`);
-        const c = JSON.parse(stdout)[0];
-        const spec = {
-            image: c.Config?.Image || '',
-            name: c.Name ? c.Name.replace(/^\//, '') : '',
-            ports: Object.keys(c.HostConfig?.PortBindings || {}).map(p => ({ host: c.HostConfig.PortBindings[p][0].HostPort, container: p.split('/')[0] })),
-            volumes: c.Mounts?.map(m => ({ host: m.Source, container: m.Destination })) || [],
-            env: c.Config?.Env?.map(e => { const [k, ...v] = e.split('='); return { key: k, value: v.join('=') }; }) || [],
-            resources: { cpus: c.HostConfig?.NanoCpus ? String(c.HostConfig.NanoCpus / 1e9) : '', memory: c.HostConfig?.Memory ? Math.floor(c.HostConfig.Memory / 1e6) + 'm' : '' }
-        };
-        res.json(spec);
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
 
 app.post('/api/docker/logs', async (req, res) => {
     try {
-        const { stdout, stderr } = await execPromise(`docker logs --tail 50 ${req.body.id}`);
+        const { stdout, stderr } = await execPromise(`docker logs --tail 50 "${req.body.id}"`);
         res.json({ logs: stdout + '\n' + stderr });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -835,10 +850,10 @@ app.post('/api/docker/action', async (req, res) => {
 
         let cmd = '';
         switch (action) {
-            case 'start': cmd = `docker start ${id}`; break;
-            case 'stop': cmd = `docker stop ${id}`; break;
-            case 'restart': cmd = `docker restart ${id}`; break;
-            case 'rm': cmd = `docker rm -f ${id}`; break;
+            case 'start': cmd = `docker start "${id}"`; break;
+            case 'stop': cmd = `docker stop "${id}"`; break;
+            case 'restart': cmd = `docker restart "${id}"`; break;
+            case 'rm': cmd = `docker rm -f "${id}"`; break;
             default: throw new Error(`Unsupported action: ${action}`);
         }
 
@@ -856,7 +871,7 @@ app.post('/api/docker/inspect', async (req, res) => {
         const { id } = req.body;
         if (!id) throw new Error('Container ID required');
 
-        const { stdout } = await execPromise(`docker inspect ${id} --format "{{json .}}"`);
+        const { stdout } = await execPromise(`docker inspect "${id}" --format "{{json .}}"`);
         const raw = JSON.parse(stdout);
         
         // Map back to our internal DockerCreateSpec format
