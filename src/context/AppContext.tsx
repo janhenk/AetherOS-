@@ -28,6 +28,7 @@ const INITIAL_STATE: AppState = {
         model: 'gemini-1.5-pro',
     },
     serverState: null,
+    statsHistory: [],
     activeScenario: null,
     isYoloMode: false,
     pendingApproval: null,
@@ -117,11 +118,22 @@ function appReducer(state: AppState, action: AppAction): AppState {
                 sessionMetrics: { ...state.sessionMetrics, ...action.payload },
             };
 
-        case 'UPDATE_SERVER_STATE':
+        case 'UPDATE_SERVER_STATE': {
+            const newHistory = [
+                ...state.statsHistory,
+                { 
+                    cpu: action.payload.cpuLoad, 
+                    ram: action.payload.ramUsed, 
+                    timestamp: Date.now() 
+                }
+            ].slice(-600); // Keep last 600 points (10 minutes)
+
             return {
                 ...state,
-                serverState: { ...state.serverState, ...action.payload }
+                serverState: { ...state.serverState, ...action.payload },
+                statsHistory: newHistory
             };
+        }
 
         case 'INITIALIZE_CONVERSATIONS':
             return {

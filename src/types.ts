@@ -94,6 +94,12 @@ export interface StoreApp {
     store: string;
 }
 
+export interface StatsHistoryPoint {
+    cpu: number;
+    ram: number;
+    timestamp: number;
+}
+
 export interface ServerState {
     cpuLoad: number; // 0-100%
     ramUsed: number; // 0-100%
@@ -120,6 +126,7 @@ export interface AppState {
     activeTab: 'diagnostics' | 'sensors' | 'network';
     sessionMetrics: SessionMetrics;
     serverState: ServerState | null;
+    statsHistory: StatsHistoryPoint[];
     activeScenario: null;
     isYoloMode: boolean;
     pendingApproval: { id: string; action: string; params: any } | null;
