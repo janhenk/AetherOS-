@@ -593,10 +593,12 @@ const apiPlugin = () => {
             throw new Error(`Failed to create repository directory: ${mkdirErr.message}`);
           }
 
-          // Download and extract using curl and unzip
-          const cmd = `curl -L '${url}' -o '${zipPath}' && unzip -o '${zipPath}' -d '${targetDir}' && rm '${zipPath}'`;
-
-          await execPromise(cmd);
+          // Download and extract using platform-appropriate tools
+          if (os.platform() === 'win32') {
+            await execPromise(`powershell -Command "Invoke-WebRequest -Uri '${url}' -OutFile '${zipPath}'; Expand-Archive -Path '${zipPath}' -DestinationPath '${targetDir}' -Force; Remove-Item '${zipPath}'"`);
+          } else {
+            await execPromise(`curl -L '${url}' -o '${zipPath}' && unzip -o '${zipPath}' -d '${targetDir}' && rm '${zipPath}'`);
+          }
           
           // Persist Store URL
           const stores = fs.existsSync(STORES_FILE) ? JSON.parse(fs.readFileSync(STORES_FILE, 'utf8')) : [];
