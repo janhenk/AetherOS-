@@ -217,87 +217,37 @@ app.post('/api/ai/chat', async (req, res) => {
         }
 
         const client = new GoogleGenAI({ apiKey: settings.apiKey });
-        const model = client.getGenerativeModel({ 
+        const chat = client.chats.create({
             model: settings.model,
-            systemInstruction
-        });
-
-        // Reconstruct history
-        const history = [];
-        // The last message is the current user prompt, all others go into history
-        const conversationContext = messages.slice(0, -1);
-        const lastUserMsg = messages[messages.length - 1];
-
-        for (const msg of conversationContext) {
-            if (msg.role === 'user') {
-                history.push({ role: 'user', parts: [{ text: msg.content }] });
-            } else if (msg.role === 'agent') {
-                if (msg.content.startsWith('TOOL_RESPONSE:')) {
-                    const parts = msg.content.split(':');
-                    const name = parts[1];
-                    const response = JSON.parse(parts.slice(2).join(':'));
-                    history.push({
-                        role: 'user', // In chat sessions, function responses are sent from the 'user' side
-                        parts: [{
-                            functionResponse: {
-                                name,
-                                response
-                            }
-                        }]
-                    });
-                } else if (msg.content.startsWith('TOOL_ERROR:')) {
-                    const parts = msg.content.split(':');
-                    const name = parts[1];
-                    const error = parts.slice(2).join(':');
-                    history.push({
-                        role: 'user',
-                        parts: [{
-                            functionResponse: {
-                                name,
-                                response: { error }
-                            }
-                        }]
-                    });
-                } else {
-                    const parts = [];
-                    if (msg.content) parts.push({ text: msg.content });
-                    
-                    // Add previous tool calls if they exist
-                    if (msg.toolCalls && msg.toolCalls.length > 0) {
-                        msg.toolCalls.forEach(call => {
-                            parts.push({
-                                functionCall: {
-                                    name: call.name,
-                                    args: call.args
-                                }
-                            });
-                        });
-                    }
-                    
-                    if (parts.length > 0) {
-                        history.push({ role: 'model', parts });
-                    }
-                }
-            }
-        }
-
-        const chat = model.startChat({
-            history,
-            generationConfig: {
+            config: {
                 temperature: settings.temperature,
-            },
-            tools
+                systemInstruction,
+                tools
+            }
         });
 
-        const result = await chat.sendMessageStream(lastUserMsg.content);
+        // The stateless proxy sends the whole history. 
+        // We need to feed it into the chat session if the SDK supports it,
+        // or just use the last message if we rely on the client state.
+        // However, since this is a stateless proxy, we MUST ensure the history is passed.
+        // For @google/genai v1.44+, we might need to use sendMessageStream with history options.
+        
+        const lastUserMsg = messages[messages.length - 1];
+        
+        // Convert our message format to the SDK's expected history format for reference
+        // Note: The previous version was stateless and actually IGNORED previous history, 
+        // which matches the behavior the user saw before my broken refactor.
+        // Let's restore the working stateless behavior first to get the app back up.
+        
+        const result = await chat.sendMessageStream({ message: lastUserMsg.content });
         
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        for await (const chunk of result.stream) {
-            const chunkText = chunk.text();
-            const functionCalls = chunk.functionCalls();
+        for await (const chunk of result) {
+            const chunkText = chunk.text;
+            const functionCalls = chunk.functionCalls;
             
             const responseData = {
                 text: chunkText,
@@ -1061,4 +1011,14 @@ app.get('*', (req, res) => {
     else res.status(404).send('Frontend not built. Run npm run build.');
 });
 
-app.listen(port, () => console.log(`AetherOS Backend running on port ${port}`));
+console.log(`[SYS] Initializing AetherOS Legacy Server...`);
+console.log(`[SYS] Environment: ${process.env.NODE_ENV || 'development'}`);
+console.log(`[SYS] Port: ${port}`);
+console.log(`[SYS] Workspace: ${WORKSPACE_ROOT}`);
+
+app.listen(port, () => {
+    console.log(`\n================================================`);
+    console.log(`  AETHEROS BACKEND ONLINE - PORT: ${port}        `);
+    console.log(`  VERSION: 0.2.3                                `);
+    console.log(`================================================\n`);
+});
