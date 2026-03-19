@@ -20,8 +20,9 @@ export const AGENTS: AgentDefinition[] = [
         
         You have advanced systems access:
         - Filesystem: listFiles, readFile, writeFile.
-        - Docker: editDockerConfig, getDockerLogs, listDockerContainers, getDockerStats.
+        - Docker: editDockerConfig, getDockerLogs, listDockerContainers, getDockerStats, manageDockerContainer.
         - Host: updateHostOS.
+        - Terminal: runTerminalCommand.
         
         When performing a "Diagnosis", you MUST:
         1. Fetch real-time metrics using getDockerStats.
@@ -44,6 +45,7 @@ export const AGENTS: AgentDefinition[] = [
         - Web: googleSearch, scrapeWebPage.
         - App Store: searchAppStore.
         - Filesystem: listFiles, readFile, writeFile.
+        - Terminal: runTerminalCommand.
         
         Use these tools to gather current intelligence or recommend software. If the user asks for information not in your training data or specifically asks you to search, use googleSearch. Use scrapeWebPage to pull details from a specific URL. Your responses should reference packet loss, latency spikes, or bandwidth saturation when relevant. End responses with a status such as "Network throughput stable." or "All sockets open."`,
     },

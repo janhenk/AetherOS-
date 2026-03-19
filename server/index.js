@@ -348,29 +348,34 @@ app.get('/api/stats', async (req, res) => {
         } catch (e) { }
 
         // IP
-        const interfaces = os.networkInterfaces();
-        let ipAddress = '127.0.0.1';
-        const ipv4Interfaces = [];
-        for (const name of Object.keys(interfaces)) {
-            for (const iface of interfaces[name] || []) {
-                if (!iface.internal && iface.family === 'IPv4') {
-                    ipv4Interfaces.push({ name, address: iface.address });
+        let ipAddress = req.headers.host ? req.headers.host.split(':')[0] : '127.0.0.1';
+        if (ipAddress === 'localhost' || ipAddress === '127.0.0.1') {
+            const interfaces = os.networkInterfaces();
+            const ipv4Interfaces = [];
+            for (const name of Object.keys(interfaces)) {
+                for (const iface of interfaces[name] || []) {
+                    if (!iface.internal && iface.family === 'IPv4') {
+                        ipv4Interfaces.push({ name, address: iface.address });
+                    }
                 }
+            }
+
+            if (ipv4Interfaces.length > 0) {
+                // Priority: physical > virtual
+                ipv4Interfaces.sort((a, b) => {
+                    const isVirtual = (n) => /docker|veth|br-|utun|bridge|vbox|vmnet/i.test(n);
+                    const aV = isVirtual(a.name);
+                    const bV = isVirtual(b.name);
+                    if (aV && !bV) return 1;
+                    if (!aV && bV) return -1;
+                    return 0;
+                });
+                ipAddress = ipv4Interfaces[0].address;
             }
         }
 
-        if (ipv4Interfaces.length > 0) {
-            // Priority: physical > virtual
-            ipv4Interfaces.sort((a, b) => {
-                const isVirtual = (n) => /docker|veth|br-|utun|bridge|vbox|vmnet/i.test(n);
-                const aV = isVirtual(a.name);
-                const bV = isVirtual(b.name);
-                if (aV && !bV) return 1;
-                if (!aV && bV) return -1;
-                return 0;
-            });
-            ipAddress = ipv4Interfaces[0].address;
-        }
+        let hostName = os.hostname();
+        let osInfo = `${os.type()} ${os.release()}`;
 
         // Docker
         let containers = [], dockerRunning = false;
@@ -385,6 +390,12 @@ app.get('/api/stats', async (req, res) => {
                 else if (c.State === 'exited' || c.State === 'dead') status = 'stopped';
                 return { id: c.ID, name: c.Names, status, uptime: c.Status };
             });
+
+            // Re-fetch accurate host OS and hostname via Docker Info
+            const infoStdout = await execPromise('docker info --format "{{json .}}"');
+            const info = JSON.parse(infoStdout.stdout);
+            if (info.Name) hostName = info.Name;
+            if (info.OperatingSystem) osInfo = info.OperatingSystem.replace(' Docker Desktop', ''); // Clean windows strings
         } catch (e) { }
 
         // Version
@@ -393,7 +404,7 @@ app.get('/api/stats', async (req, res) => {
         res.json({
             cpuLoad, ramUsed, storageUsed: cachedStorage, containers,
             deployments: activeDeployments, ipAddress, dockerRunning,
-            hostname: os.hostname(), osInfo: `${os.type()} ${os.release()}`,
+            hostname: hostName, osInfo: osInfo,
             networkInbound, networkOutbound,
             insights: tacticalInsights,
             projectVersion: pkg.version

@@ -86,6 +86,18 @@ export function useGemini() {
                                         }
                                     },
                                     {
+                                        name: 'manageDockerContainer',
+                                        description: 'Starts, stops, restarts, or removes a Docker container by ID or name.',
+                                        parameters: {
+                                            type: 'OBJECT',
+                                            properties: {
+                                                id: { type: 'STRING', description: 'The container ID or name' },
+                                                action: { type: 'STRING', enum: ['start', 'stop', 'restart', 'rm'], description: 'The action to perform on the container' }
+                                            },
+                                            required: ['id', 'action']
+                                        }
+                                    },
+                                    {
                                         name: 'searchAppStore',
                                         description: 'Searches the CasaOS community app store for applications matching a query (e.g., "media server", "ad blocker", "database"). Returns up to 5 matching apps with their metadata.',
                                         parameters: {
@@ -181,6 +193,17 @@ export function useGemini() {
                                             },
                                             required: ['query']
                                         }
+                                    },
+                                    {
+                                        name: 'runTerminalCommand',
+                                        description: 'Executes a raw Linux bash or Windows command on the host OS. NOTE: The host may be a Windows machine running cmd.exe. If a POSIX utility (like xargs or grep) fails, retry using Windows-native commands or powershell -Command "...". Returns stdout and stderr.',
+                                        parameters: {
+                                            type: 'OBJECT',
+                                            properties: {
+                                                command: { type: 'STRING', description: 'The terminal command to execute' }
+                                            },
+                                            required: ['command']
+                                        }
                                     }
                                 ]
                             }]
@@ -253,6 +276,10 @@ export function useGemini() {
                                     }
                                     const startRes = await apiFetch('/api/docker/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(spec) });
                                     result = await startRes.json();
+                                } else if (call.name === 'manageDockerContainer') {
+                                    const args = call.args as { id: string, action: string };
+                                    const actionRes = await apiFetch('/api/docker/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+                                    result = await actionRes.json();
                                 } else if (call.name === 'searchAppStore') {
                                     const args = call.args as { query: string };
                                     const searchRes = await apiFetch('/api/store/apps');
@@ -306,6 +333,10 @@ export function useGemini() {
                                     const args = call.args as { query: string };
                                     const searchRes = await apiFetch('/api/tools/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
                                     result = await searchRes.json();
+                                } else if (call.name === 'runTerminalCommand') {
+                                    const args = call.args as { command: string };
+                                    const execRes = await apiFetch('/api/terminal/exec', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: args.command, agent: agentId }) });
+                                    result = await execRes.json();
                                 }
 
                                 functionResponses.push({

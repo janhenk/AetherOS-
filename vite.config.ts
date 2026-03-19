@@ -1061,7 +1061,7 @@ const apiPlugin = () => {
         }
       });
 
-      server.middlewares.use('/api/stats', async (_req: any, res: any) => {
+      server.middlewares.use('/api/stats', async (req: any, res: any) => {
         try {
           const currentCpus = os.cpus();
           let totalIdle = 0, totalTick = 0;
@@ -1112,18 +1112,32 @@ const apiPlugin = () => {
           } catch (e) { /* ignore netstat errors */ }
 
           // IP Address Extraction
-          const interfaces = os.networkInterfaces();
-          let ipAddress = '127.0.0.1';
-          for (const name of Object.keys(interfaces)) {
-            for (const iface of interfaces[name] || []) {
-              // Skip internal and non-ipv4 addresses
-              if (!iface.internal && iface.family === 'IPv4') {
-                ipAddress = iface.address;
-                break;
+          let ipAddress = req.headers.host ? req.headers.host.split(':')[0] : '127.0.0.1';
+          if (ipAddress === 'localhost' || ipAddress === '127.0.0.1') {
+            const interfaces = os.networkInterfaces();
+            const ipv4Interfaces: any[] = [];
+            for (const name of Object.keys(interfaces)) {
+              for (const iface of interfaces[name] || []) {
+                if (!iface.internal && iface.family === 'IPv4') {
+                  ipv4Interfaces.push({ name, address: iface.address });
+                }
               }
             }
-            if (ipAddress !== '127.0.0.1') break;
+            if (ipv4Interfaces.length > 0) {
+              ipv4Interfaces.sort((a, b) => {
+                  const isVirtual = (n: string) => /docker|veth|br-|utun|bridge|vbox|vmnet/i.test(n);
+                  const aV = isVirtual(a.name);
+                  const bV = isVirtual(b.name);
+                  if (aV && !bV) return 1;
+                  if (!aV && bV) return -1;
+                  return 0;
+              });
+              ipAddress = ipv4Interfaces[0].address;
+            }
           }
+
+          let hostName = os.hostname();
+          let osInfo = `${os.type()} ${os.release()}`;
 
           let containers: any[] = [];
           let dockerRunning = false;
@@ -1131,7 +1145,7 @@ const apiPlugin = () => {
             const { stdout } = await execPromise('docker ps -a --format "{{json .}}"');
             dockerRunning = true;
             const lines = stdout.trim().split('\n').filter(l => l);
-            containers = lines.map(line => {
+            containers = lines.map((line: string) => {
               const c = JSON.parse(line);
               let status = 'failed';
               if (c.State === 'running') status = 'running';
@@ -1145,6 +1159,12 @@ const apiPlugin = () => {
                 uptime: c.Status
               };
             });
+
+            // Re-fetch accurate host OS and hostname via Docker Info
+            const infoStdout = await execPromise('docker info --format "{{json .}}"');
+            const info = JSON.parse(infoStdout.stdout);
+            if (info.Name) hostName = info.Name;
+            if (info.OperatingSystem) osInfo = info.OperatingSystem.replace(' Docker Desktop', ''); // Clean windows strings
           } catch (e) { /* ignores missing docker, sets dockerRunning false */ }
 
           res.setHeader('Content-Type', 'application/json');
@@ -1154,8 +1174,8 @@ const apiPlugin = () => {
             storageUsed: cachedStorage,
             containers,
             deployments: activeDeployments,
-            hostname: os.hostname(),
-            osInfo: `${os.type()} ${os.release()}`,
+            hostname: hostName,
+            osInfo: osInfo,
             ipAddress,
             dockerRunning,
             networkInbound,
