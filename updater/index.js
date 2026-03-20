@@ -20,7 +20,8 @@ app.post('/update', (req, res) => {
       cd /app && \\
       git config --global --add safe.directory /app && \\
       git fetch --all && \\
-      git reset --hard origin/main && \\
+      BRANCH=$(git rev-parse --abbrev-ref HEAD) && \\
+      git reset --hard origin/$BRANCH && \\
       docker compose build --no-cache aetheros-dashboard && \\
       docker compose up -d aetheros-dashboard
     `;

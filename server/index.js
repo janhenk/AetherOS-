@@ -1033,8 +1033,10 @@ app.get('/api/system/check-updates', async (req, res) => {
         if (!(await isGitAvailable())) {
             return res.json({ success: false, output: "System check failed: 'git' core missing from environment.", updateAvailable: false });
         }
-        await execPromise('git fetch origin main');
-        const { stdout } = await execPromise('git rev-list HEAD...origin/main --count');
+        const { stdout: branchOut } = await execPromise('git rev-parse --abbrev-ref HEAD');
+        const branch = branchOut.trim() || 'master';
+        await execPromise(`git fetch origin ${branch}`);
+        const { stdout } = await execPromise(`git rev-list HEAD...origin/${branch} --count`);
         const count = parseInt(stdout.trim(), 10);
         res.json({ success: true, updateAvailable: count > 0, behindCount: count });
     } catch (err) { res.status(500).json({ error: err.message }); }
