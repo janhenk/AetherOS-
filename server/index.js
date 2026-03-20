@@ -9,6 +9,8 @@ import { fileURLToPath } from 'url';
 import YAML from 'yaml';
 import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
+import { runAgentLoop, AGENTS, TOOLS } from './agent.js';
+import { startSlackApp, stopSlackApp } from './slack.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,13 +107,24 @@ function getSettings() {
             isSandboxNetworkEnabled: false, 
             isYoloMode: false, 
             registries: [],
-            agentOverrides: {}
+            agentOverrides: {},
+            bgProvider: 'gemini',
+            bgBaseUrl: '',
+            bgApiKey: '',
+            bgModelName: '',
+            bgIterationLimit: 5,
+            slackEnabled: false,
+            slackBotToken: '',
+            slackAppToken: ''
         };
     }
     const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
     if (settings.isYoloMode === undefined) settings.isYoloMode = false;
     if (settings.registries === undefined) settings.registries = [];
     if (settings.agentOverrides === undefined) settings.agentOverrides = {};
+    if (settings.bgProvider === undefined) settings.bgProvider = 'gemini';
+    if (settings.bgIterationLimit === undefined) settings.bgIterationLimit = 5;
+    if (settings.slackEnabled === undefined) settings.slackEnabled = false;
     return settings;
 }
 
@@ -122,7 +135,15 @@ function saveSettings(settings) {
 // --- API Endpoints ---
 
 const activeTokens = new Set();
+const INTERNAL_TOKEN = crypto.randomUUID();
+activeTokens.add(INTERNAL_TOKEN);
+
+// Start Slack Integration
+startSlackApp(getSettings(), getSettings, `http://localhost:${port}`, INTERNAL_TOKEN);
+
 const CHAT_HISTORY_FILE = CHAT_FILE;
+const PENDING_TASKS_FILE = path.join(DATA_DIR, 'pending_tasks.json');
+let pendingTasks = fs.existsSync(PENDING_TASKS_FILE) ? JSON.parse(fs.readFileSync(PENDING_TASKS_FILE, 'utf8')) : [];
 
 app.post('/api/auth/setup', async (req, res) => {
     try {
@@ -180,7 +201,13 @@ app.get('/api/config/get', (req, res) => {
     const settings = getSettings();
     const safeSettings = { ...settings };
     if (safeSettings.apiKey) safeSettings.hasKey = true;
+    if (safeSettings.bgApiKey) safeSettings.hasBgKey = true;
+    if (safeSettings.slackBotToken) safeSettings.hasSlackBotToken = true;
+    if (safeSettings.slackAppToken) safeSettings.hasSlackAppToken = true;
     delete safeSettings.apiKey;
+    delete safeSettings.bgApiKey;
+    delete safeSettings.slackBotToken;
+    delete safeSettings.slackAppToken;
     res.json(safeSettings);
 });
 
@@ -192,7 +219,16 @@ app.post('/api/config/save', (req, res) => {
     if (newSettings.apiKey === '********' || !newSettings.apiKey) {
         newSettings.apiKey = currentSettings.apiKey;
     }
-    
+    if (newSettings.bgApiKey === '********' || !newSettings.bgApiKey) {
+        newSettings.bgApiKey = currentSettings.bgApiKey;
+    }
+    if (newSettings.slackBotToken === '********' || !newSettings.slackBotToken) {
+        newSettings.slackBotToken = currentSettings.slackBotToken;
+    }
+    if (newSettings.slackAppToken === '********' || !newSettings.slackAppToken) {
+        newSettings.slackAppToken = currentSettings.slackAppToken;
+    }
+
     // Preserve registries if not provided or empty in manual save
     if (!newSettings.registries || newSettings.registries.length === 0) {
         newSettings.registries = currentSettings.registries;
@@ -204,8 +240,87 @@ app.post('/api/config/save', (req, res) => {
     }
     
     saveSettings(newSettings);
+    startSlackApp(newSettings, getSettings, `http://localhost:${port}`, INTERNAL_TOKEN);
     res.json({ success: true });
 });
+
+let cachedModels = [];
+let lastModelFetch = 0;
+
+app.get('/api/models', async (req, res) => {
+    try {
+        const settings = getSettings();
+        if (!settings.apiKey) return res.json({ models: [] });
+        
+        if (cachedModels.length > 0 && Date.now() - lastModelFetch < 24 * 60 * 60 * 1000) {
+            return res.json({ models: cachedModels });
+        }
+        
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${settings.apiKey}`);
+        if (!response.ok) throw new Error('Failed to fetch models from Google');
+        
+        const data = await response.json();
+        cachedModels = (data.models || [])
+            .filter(m => {
+                const name = m.name.toLowerCase();
+                const displayName = (m.displayName || '').toLowerCase();
+                const hasGen = m.supportedGenerationMethods?.includes('generateContent');
+                const isExcluded = ['nano', 'banana', 'robotics', 'computer'].some(w => name.includes(w) || displayName.includes(w));
+                return hasGen && !isExcluded;
+            })
+            .map(m => ({
+                id: m.name.replace('models/', ''),
+                label: m.displayName || m.name.replace('models/', ''),
+                maxTokens: m.inputTokenLimit
+            }));
+        lastModelFetch = Date.now();
+        
+        res.json({ models: cachedModels });
+    } catch (err) {
+        if (cachedModels.length > 0) return res.json({ models: cachedModels });
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/tasks', (req, res) => {
+    const { agentId, prompt, delayMinutes } = req.body;
+    pendingTasks.push({
+        id: crypto.randomUUID(),
+        agentId,
+        prompt,
+        executeAt: Date.now() + (delayMinutes * 60000)
+    });
+    fs.writeFileSync(PENDING_TASKS_FILE, JSON.stringify(pendingTasks, null, 2));
+    res.json({ success: true, message: `Scheduled task in ${delayMinutes} minutes.` });
+});
+
+setInterval(async () => {
+    const now = Date.now();
+    const readyTasks = pendingTasks.filter(t => t.executeAt <= now);
+    if (readyTasks.length === 0) return;
+    
+    pendingTasks = pendingTasks.filter(t => t.executeAt > now);
+    fs.writeFileSync(PENDING_TASKS_FILE, JSON.stringify(pendingTasks, null, 2));
+    
+    let chatData = fs.existsSync(CHAT_HISTORY_FILE) ? JSON.parse(fs.readFileSync(CHAT_HISTORY_FILE, 'utf8')) : {};
+    const settings = getSettings();
+    const baseUrl = `http://localhost:${port}`;
+    
+    for (const task of readyTasks) {
+        try {
+            const history = chatData[task.agentId] || [];
+            const agentDef = AGENTS.find(a => a.id === task.agentId) || AGENTS[0];
+            const systemInstruction = settings.agentOverrides?.[task.agentId]?.systemPrompt || agentDef.systemPrompt;
+            
+            const newHistory = await runAgentLoop(task.agentId, task.prompt, systemInstruction, history, settings, TOOLS, baseUrl, INTERNAL_TOKEN);
+            
+            chatData[task.agentId] = newHistory;
+            fs.writeFileSync(CHAT_HISTORY_FILE, JSON.stringify(chatData, null, 2));
+        } catch (e) {
+            console.error("Background Agent Error:", e);
+        }
+    }
+}, 30000);
 
 app.post('/api/ai/chat', async (req, res) => {
     try {
@@ -665,8 +780,9 @@ ${code}
 
         // Mount the source directory and run `dotnet run` directly on the csproj.
         // It's a standard console app with no dependencies so it doesn't need external NuGet packages.
-        const networkFlag = allowNetwork ? '' : '--network none ';
-        const dockerCmd = `docker run --rm ${networkFlag}--memory="512m" --cpus="1.0" -v "${scriptDir}:/app/src" aetheros/dotnet-sandbox /bin/sh -c "dotnet run --project /app/src/Sandbox.csproj"`;
+        const networkFlag = allowNetwork || isYoloMode ? '' : '--network none ';
+        const resourceFlags = isYoloMode ? '--privileged -v "/:/host_root"' : '--memory="512m" --cpus="1.0"';
+        const dockerCmd = `docker run --rm ${networkFlag}${resourceFlags} -v "${scriptDir}:/app/src" aetheros/dotnet-sandbox /bin/sh -c "dotnet run --project /app/src/Sandbox.csproj"`;
 
         let result;
         try {

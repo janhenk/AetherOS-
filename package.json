@@ -1,7 +1,7 @@
 {
   "name": "lcars-chat",
   "private": true,
-  "version": "0.2.9",
+  "version": "0.2.10",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.44.0",
+    "@slack/bolt": "^4.6.0",
     "chart.js": "^4.5.1",
     "cors": "^2.8.6",
     "express": "^4.22.1",

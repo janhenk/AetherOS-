@@ -4,7 +4,7 @@ import { getAllAgents } from '../../agents';
 import { apiFetch } from '../../utils/api';
 import type { GeminiModel, Settings } from '../../types';
 
-const MODELS: { id: GeminiModel; label: string; tag?: string }[] = [
+const DEFAULT_MODELS: { id: GeminiModel; label: string; tag?: string; maxTokens?: number }[] = [
     { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', tag: 'PREVIEW' },
     { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash', tag: 'PREVIEW' },
     { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite', tag: 'PREVIEW' },
@@ -22,10 +22,30 @@ const SettingsModal = memo(function SettingsModal() {
     const [isUpdating, setIsUpdating] = useState(false);
     const [updateMessage, setUpdateMessage] = useState<string | null>(null);
     const [updateAvailable, setUpdateAvailable] = useState<boolean | null>(null);
+    const [availableModels, setAvailableModels] = useState<{ id: string; label: string; tag?: string; maxTokens?: number }[]>([]);
+    const [isFetchingModels, setIsFetchingModels] = useState(false);
+
+    const fetchModels = useCallback(async () => {
+        setIsFetchingModels(true);
+        try {
+            const res = await apiFetch('/api/models');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.models && data.models.length > 0) {
+                    setAvailableModels(data.models);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch models:', e);
+        } finally {
+            setIsFetchingModels(false);
+        }
+    }, []);
 
     React.useEffect(() => {
         if (isSettingsOpen) {
             checkUpdates();
+            fetchModels();
             setLocalSettings({ ...settings });
         }
     }, [isSettingsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -119,6 +139,25 @@ const SettingsModal = memo(function SettingsModal() {
         dispatch({ type: 'TOGGLE_SETTINGS' });
     }, [dispatch, settings]);
 
+    const groupedModels = React.useMemo(() => {
+        const modelsToUse = availableModels.length > 0 ? availableModels : DEFAULT_MODELS;
+        const groups: { [key: string]: typeof modelsToUse } = {};
+        
+        modelsToUse.forEach(m => {
+            let groupName = "Other";
+            const match = m.label.match(/Gemini (\d+(\.\d+)?)/i);
+            if (match) {
+                groupName = `Gemini ${match[1]}`;
+            } else if (m.label.toLowerCase().includes('gemini')) {
+                groupName = "Gemini Legacy";
+            }
+            if (!groups[groupName]) groups[groupName] = [];
+            groups[groupName].push(m);
+        });
+        
+        return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+    }, [availableModels]);
+
     if (!isSettingsOpen) return null;
 
     return (
@@ -177,29 +216,62 @@ const SettingsModal = memo(function SettingsModal() {
 
                     {/* Model */}
                     <Field label="GEMINI MODEL">
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {MODELS.map((m) => (
-                                <button
-                                    key={m.id}
-                                    id={`model-btn-${m.id}`}
-                                    onClick={() => setLocalSettings((s) => ({ ...s, model: m.id }))}
-                                    style={{
-                                        ...pillBtnStyle,
-                                        background: localSettings.model === m.id ? 'var(--lcars-sage)' : 'transparent',
-                                        color: localSettings.model === m.id ? '#141414' : 'var(--lcars-text-dim)',
-                                        border: `1px solid ${localSettings.model === m.id ? 'var(--lcars-sage)' : '#2a2a2a'}`,
-                                        display: 'flex', alignItems: 'center', gap: 6,
-                                    }}
-                                >
-                                    {m.label}
-                                    {m.tag && (
-                                        <span style={{
-                                            fontSize: 8, fontWeight: 700,
-                                            color: localSettings.model === m.id ? '#141414' : 'var(--lcars-text-dim)',
-                                            opacity: 0.7,
-                                        }}>{m.tag}</span>
-                                    )}
-                                </button>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+                            <button
+                                type="button"
+                                onClick={fetchModels}
+                                disabled={isFetchingModels}
+                                style={{
+                                    ...pillBtnStyle,
+                                    border: '1px solid var(--lcars-sage)',
+                                    color: 'var(--lcars-sage)',
+                                    padding: '6px 14px',
+                                    fontSize: 10,
+                                    display: 'flex', alignItems: 'center', gap: 6,
+                                    opacity: isFetchingModels ? 0.5 : 1
+                                }}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>sync</span>
+                                {isFetchingModels ? 'SYNCING...' : 'SYNC GOOGLE MODELS'}
+                            </button>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            {groupedModels.map(([groupName, modelsInGroup]) => (
+                                <div key={groupName}>
+                                    <h3 style={{ 
+                                        fontFamily: 'var(--font-display)', fontSize: 12, 
+                                        color: 'var(--lcars-sage)', marginBottom: 8, 
+                                        letterSpacing: '0.1em', textTransform: 'uppercase',
+                                        margin: '0 0 8px 0', borderBottom: '1px solid #1a1a1a', paddingBottom: 4
+                                    }}>
+                                        {groupName}
+                                    </h3>
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                        {modelsInGroup.map((m) => (
+                                            <button
+                                                key={m.id}
+                                                id={`model-btn-${m.id}`}
+                                                onClick={() => setLocalSettings((s) => ({ ...s, model: m.id }))}
+                                                style={{
+                                                    ...pillBtnStyle,
+                                                    background: localSettings.model === m.id ? 'var(--lcars-sage)' : 'transparent',
+                                                    color: localSettings.model === m.id ? '#141414' : 'var(--lcars-text-dim)',
+                                                    border: `1px solid ${localSettings.model === m.id ? 'var(--lcars-sage)' : '#2a2a2a'}`,
+                                                    display: 'flex', alignItems: 'center', gap: 6,
+                                                }}
+                                            >
+                                                {m.label}
+                                                {(m.tag || m.maxTokens) && (
+                                                    <span style={{
+                                                        fontSize: 8, fontWeight: 700,
+                                                        color: localSettings.model === m.id ? '#141414' : 'var(--lcars-text-dim)',
+                                                        opacity: 0.7,
+                                                    }}>{m.tag || `${Math.round(m.maxTokens!/1000)}k`}</span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     </Field>
@@ -374,6 +446,107 @@ const SettingsModal = memo(function SettingsModal() {
 
                     {/* Container Registries */}
                     <RegistrySection />
+
+                    {/* Autonomous Agent Configuration */}
+                    <Field label="AUTONOMOUS AGENT CONFIGURATION" hint="Settings for background tasks and true autonomous execution (Option 2).">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    onClick={() => setLocalSettings(s => ({ ...s, bgProvider: 'gemini' }))}
+                                    style={{
+                                        ...pillBtnStyle, flex: 1,
+                                        background: localSettings.bgProvider === 'gemini' ? 'var(--lcars-sage)' : 'transparent',
+                                        color: localSettings.bgProvider === 'gemini' ? '#141414' : 'var(--lcars-text-dim)',
+                                        border: `1px solid ${localSettings.bgProvider === 'gemini' ? 'var(--lcars-sage)' : '#2a2a2a'}`,
+                                    }}
+                                >GEMINI API</button>
+                                <button
+                                    onClick={() => setLocalSettings(s => ({ ...s, bgProvider: 'openai' }))}
+                                    style={{
+                                        ...pillBtnStyle, flex: 1,
+                                        background: localSettings.bgProvider === 'openai' ? 'var(--lcars-sage)' : 'transparent',
+                                        color: localSettings.bgProvider === 'openai' ? '#141414' : 'var(--lcars-text-dim)',
+                                        border: `1px solid ${localSettings.bgProvider === 'openai' ? 'var(--lcars-sage)' : '#2a2a2a'}`,
+                                    }}
+                                >OLLAMA / OPENAI</button>
+                            </div>
+                            
+                            {localSettings.bgProvider === 'openai' && (
+                                <>
+                                    <input 
+                                        type="text" 
+                                        placeholder="API Base URL (e.g. http://localhost:11434/v1)" 
+                                        value={localSettings.bgBaseUrl || ''}
+                                        onChange={e => setLocalSettings(s => ({ ...s, bgBaseUrl: e.target.value }))}
+                                        style={inputStyle} 
+                                    />
+                                    <input 
+                                        type="password" 
+                                        placeholder="API Key (optional for local Ollama)" 
+                                        value={localSettings.bgApiKey || (state.settings.hasBgKey ? '********' : '')}
+                                        onChange={e => setLocalSettings(s => ({ ...s, bgApiKey: e.target.value }))}
+                                        style={inputStyle} 
+                                    />
+                                </>
+                            )}
+                            
+                            <input 
+                                type="text" 
+                                placeholder={localSettings.bgProvider === 'gemini' ? "Model Name (e.g. gemini-2.5-pro)" : "Model Name (e.g. llama3.2)"}
+                                value={localSettings.bgModelName || ''}
+                                onChange={e => setLocalSettings(s => ({ ...s, bgModelName: e.target.value }))}
+                                style={inputStyle} 
+                            />
+                            
+                            <div>
+                                <div style={{ fontSize: 9, color: '#444', marginBottom: 4 }}>MAX TOOL ITERATIONS: {localSettings.bgIterationLimit || 5}</div>
+                                <input
+                                    type="range"
+                                    min={1} max={20} step={1}
+                                    value={localSettings.bgIterationLimit || 5}
+                                    onChange={(e) => setLocalSettings(s => ({ ...s, bgIterationLimit: parseInt(e.target.value) }))}
+                                    style={{ width: '100%', accentColor: 'var(--lcars-sage)', cursor: 'pointer' }}
+                                />
+                            </div>
+                        </div>
+                    </Field>
+
+                    <Field label="SLACK INTEGRATION" hint="Connect LCARS to your business Slack. Uses Socket Mode (no public IP needed).">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, cursor: 'pointer', fontFamily: 'var(--lcars-font-mono, monospace)', textTransform: 'uppercase' }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={localSettings.slackEnabled || false}
+                                    onChange={e => setLocalSettings(s => ({ ...s, slackEnabled: e.target.checked }))}
+                                    style={{ accentColor: 'var(--lcars-sage)' }}
+                                />
+                                ENABLE SLACK SOCKET MODE
+                            </label>
+                            
+                            {localSettings.slackEnabled && (
+                                <>
+                                    <input 
+                                        type="password" 
+                                        placeholder="Slack Bot Token (xoxb-...)" 
+                                        value={localSettings.slackBotToken || (state.settings.hasSlackBotToken ? '********' : '')}
+                                        onChange={e => setLocalSettings(s => ({ ...s, slackBotToken: e.target.value }))}
+                                        style={inputStyle} 
+                                    />
+                                    <input 
+                                        type="password" 
+                                        placeholder="Slack App Token (xapp-...)" 
+                                        value={localSettings.slackAppToken || (state.settings.hasSlackAppToken ? '********' : '')}
+                                        onChange={e => setLocalSettings(s => ({ ...s, slackAppToken: e.target.value }))}
+                                        style={inputStyle} 
+                                    />
+                                    <div style={{ fontSize: 9, color: '#666', marginTop: -4 }}>
+                                        Create a Slack App, enable Socket Mode, and copy the App-Level Token. 
+                                        Then add OAuth bot scopes (e.g. chat:write, app_mentions:read) and install to workspace to get the Bot Token.
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </Field>
 
                     <Field 
                         label="SYSTEM FIRMWARE" 

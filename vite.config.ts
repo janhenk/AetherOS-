@@ -47,6 +47,8 @@ const apiPlugin = () => {
   let cachedStorage = 50;
   const activeTokens = new Set<string>();
   const CHAT_HISTORY_FILE = path.join(process.cwd(), 'chat_history.json');
+  let cachedModels: any[] = [];
+  let lastModelFetch = 0;
 
   // Tactical Monitoring Loop
   const runTacticalMonitor = async () => {
@@ -289,7 +291,13 @@ const apiPlugin = () => {
           const settings = getSettings();
           const safeSettings = { ...settings };
           if (safeSettings.apiKey) safeSettings.hasKey = true;
+          if (safeSettings.bgApiKey) safeSettings.hasBgKey = true;
+          if (safeSettings.slackBotToken) safeSettings.hasSlackBotToken = true;
+          if (safeSettings.slackAppToken) safeSettings.hasSlackAppToken = true;
           delete safeSettings.apiKey;
+          delete safeSettings.bgApiKey;
+          delete safeSettings.slackBotToken;
+          delete safeSettings.slackAppToken;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(safeSettings));
         } catch (err: any) { res.statusCode = 500; res.end(JSON.stringify({ error: err.message })); }
@@ -303,10 +311,60 @@ const apiPlugin = () => {
           if (newSettings.apiKey === '********') {
             newSettings.apiKey = currentSettings.apiKey;
           }
+          if (newSettings.bgApiKey === '********') {
+            newSettings.bgApiKey = currentSettings.bgApiKey;
+          }
+          if (newSettings.slackBotToken === '********') {
+            newSettings.slackBotToken = currentSettings.slackBotToken;
+          }
+          if (newSettings.slackAppToken === '********') {
+            newSettings.slackAppToken = currentSettings.slackAppToken;
+          }
           saveSettings(newSettings);
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ success: true }));
         } catch (err: any) { res.statusCode = 500; res.end(JSON.stringify({ error: err.message })); }
+      });
+
+      server.middlewares.use('/api/models', async (req: any, res: any) => {
+        if (req.method !== 'GET') { res.statusCode = 405; return res.end(); }
+        try {
+          const settings = getSettings();
+          if (!settings.apiKey) {
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ models: [] }));
+          }
+          if (cachedModels.length > 0 && Date.now() - lastModelFetch < 24 * 60 * 60 * 1000) {
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ models: cachedModels }));
+          }
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${settings.apiKey}`);
+          if (!response.ok) throw new Error('Failed to fetch models from Google');
+          const data: any = await response.json();
+          cachedModels = (data.models || [])
+            .filter((m: any) => {
+                const name = m.name.toLowerCase();
+                const displayName = (m.displayName || '').toLowerCase();
+                const hasGen = m.supportedGenerationMethods?.includes('generateContent');
+                const isExcluded = ['nano', 'banana', 'robotics', 'computer'].some(w => name.includes(w) || displayName.includes(w));
+                return hasGen && !isExcluded;
+            })
+            .map((m: any) => ({
+                id: m.name.replace('models/', ''),
+                label: m.displayName || m.name.replace('models/', ''),
+                maxTokens: m.inputTokenLimit
+            }));
+          lastModelFetch = Date.now();
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ models: cachedModels }));
+        } catch (err: any) {
+          if (cachedModels.length > 0) {
+             res.setHeader('Content-Type', 'application/json');
+             return res.end(JSON.stringify({ models: cachedModels }));
+          }
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: err.message }));
+        }
       });
 
       server.middlewares.use('/api/ai/chat', async (req: any, res: any) => {

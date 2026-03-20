@@ -1,13 +1,6 @@
 export type AgentId = 'nav' | 'comms' | 'logistics' | 'security';
 export type AgentStatus = 'online' | 'processing' | 'standby' | 'active';
-export type GeminiModel =
-    | 'gemini-3.1-pro-preview'
-    | 'gemini-3-flash-preview'
-    | 'gemini-3.1-flash-lite-preview'
-    | 'gemini-3.1-flash-image-preview'
-    | 'gemini-2.0-flash'
-    | 'gemini-2.5-pro'
-    | 'gemini-1.5-pro';
+export type GeminiModel = string;
 
 export interface Message {
     id: string;
@@ -28,6 +21,21 @@ export interface Settings {
     registries?: { server: string; username: string }[];
     isYoloMode?: boolean;
     agentOverrides?: Record<string, { name?: string; shortName?: string; systemPrompt?: string }>;
+
+    // Background Autonomous Agent Settings
+    bgProvider?: 'gemini' | 'openai';
+    bgBaseUrl?: string;
+    bgApiKey?: string;
+    hasBgKey?: boolean;
+    bgModelName?: string;
+    bgIterationLimit?: number;
+
+    // Slack Integration Settings
+    slackEnabled?: boolean;
+    slackBotToken?: string;
+    hasSlackBotToken?: boolean;
+    slackAppToken?: string;
+    hasSlackAppToken?: boolean;
 }
 
 export interface SessionMetrics {

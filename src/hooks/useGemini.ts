@@ -11,6 +11,7 @@ function generateId(): string {
 export function useGemini() {
     const { state, dispatch } = useAppContext();
     const chatState = useRef<Map<AgentId, any>>(new Map());
+    const sendMessageRef = useRef<any>(null);
 
     const resetSession = useCallback((agentId: AgentId) => {
         chatState.current.delete(agentId);
@@ -143,7 +144,9 @@ export function useGemini() {
                                     },
                                     {
                                         name: 'runCSharpScript',
-                                        description: 'Writes and executes raw C# script code (.csx) securely inside an offline, isolated Docker container. Use this to perform complex calculations, data generation, or system tasks. Access to the internet and host network is blocked.',
+                                        description: state.isYoloMode 
+                                            ? 'Writes and executes raw C# script code (.csx) securely but with YOLO mode enabled: you have full network access and the host root filesystem is mounted at /host_root. Use this to perform complex system tasks.'
+                                            : 'Writes and executes raw C# script code (.csx) securely inside an offline, isolated Docker container. Use this to perform complex calculations, data generation, or system tasks. Access to the internet and host network is blocked.',
                                         parameters: {
                                             type: 'OBJECT',
                                             properties: {
@@ -203,6 +206,18 @@ export function useGemini() {
                                                 command: { type: 'STRING', description: 'The terminal command to execute' }
                                             },
                                             required: ['command']
+                                        }
+                                    },
+                                    {
+                                        name: 'scheduleTask',
+                                        description: 'Schedules a task to be executed after a delay by sending a prompt back to you. Use this to initiate yourself for future actions, reminders, or recurring tasks. Since the app is browser-based, tasks only run while the browser is open.',
+                                        parameters: {
+                                            type: 'OBJECT',
+                                            properties: {
+                                                delayMinutes: { type: 'NUMBER', description: 'The delay in minutes before the prompt is sent back to you.' },
+                                                prompt: { type: 'STRING', description: 'The message/prompt to send to yourself when the delay elapses.' }
+                                            },
+                                            required: ['delayMinutes', 'prompt']
                                         }
                                     }
                                 ]
@@ -337,6 +352,10 @@ export function useGemini() {
                                     const args = call.args as { command: string };
                                     const execRes = await apiFetch('/api/terminal/exec', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: args.command, agent: agentId }) });
                                     result = await execRes.json();
+                                } else if (call.name === 'scheduleTask') {
+                                    const args = call.args as { delayMinutes: number, prompt: string };
+                                    const schedRes = await apiFetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId, prompt: args.prompt, delayMinutes: args.delayMinutes }) });
+                                    result = await schedRes.json();
                                 }
 
                                 functionResponses.push({
@@ -388,6 +407,8 @@ export function useGemini() {
         },
         [dispatch, state.conversations, state.settings.model, state.settings.isSandboxNetworkEnabled]
     );
+
+    sendMessageRef.current = sendMessage;
 
     return { sendMessage, resetSession };
 }
