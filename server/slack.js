@@ -33,16 +33,30 @@ export async function startSlackApp(settings, getSettingsFn, baseUrl, internalTo
     try {
         await stopSlackApp();
 
-        console.log(`[Slack] Starting app with Bot Token: ${settings.slackBotToken ? (settings.slackBotToken.substring(0, 10) + '...') : 'MISSING'}`);
-        console.log(`[Slack] App Token: ${settings.slackAppToken ? (settings.slackAppToken.substring(0, 10) + '...') : 'MISSING'}`);
+        // Basic Token Validation
+        const isBotToken = settings.slackBotToken?.startsWith('xoxb-');
+        const isAppToken = settings.slackAppToken?.startsWith('xapp-');
+
+        if (!isBotToken) {
+            console.error("[Slack] WARNING: Bot Token should start with 'xoxb-'. Found:", settings.slackBotToken?.substring(0, 5));
+        }
+        if (!isAppToken) {
+            console.error("[Slack] WARNING: App Token should start with 'xapp-'. Found:", settings.slackAppToken?.substring(0, 5));
+        }
+
+        console.log(`[Slack] Initializing Socket Mode...`);
 
         slackApp = new App({
             token: settings.slackBotToken,
             appToken: settings.slackAppToken,
             socketMode: true,
-            // Disable default ExpressReceiver since we already have an express app
-            // However, bolt defaults to its own internal HTTP server if not provided.
-            // Since we use SocketMode, the HTTP server is mostly unused.
+            // Capture errors to prevent process crash
+            logLevel: 'error', 
+        });
+
+        // Global error handler for the Bolt app
+        slackApp.error(async (error) => {
+            console.error("[Slack] Bolt App Error:", error.message || error);
         });
 
         // Listen for mentions
