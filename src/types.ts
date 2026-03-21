@@ -13,7 +13,7 @@ export interface Message {
 }
 
 export interface Settings {
-    apiKey: string;
+    apiKey?: string;
     hasKey?: boolean;
     model: GeminiModel;
     temperature: number;

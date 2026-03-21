@@ -46,7 +46,14 @@ const SettingsModal = memo(function SettingsModal() {
         if (isSettingsOpen) {
             checkUpdates();
             fetchModels();
-            setLocalSettings({ ...settings });
+            // Store tokens as 'undefined' if masked, so we can detect when user clears them to ''
+            setLocalSettings({ 
+                ...settings,
+                slackBotToken: settings.hasSlackBotToken ? undefined : settings.slackBotToken,
+                slackAppToken: settings.hasSlackAppToken ? undefined : settings.slackAppToken,
+                apiKey: settings.hasKey ? undefined : settings.apiKey,
+                bgApiKey: settings.hasBgKey ? undefined : settings.bgApiKey
+            });
         }
     }, [isSettingsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -207,7 +214,7 @@ const SettingsModal = memo(function SettingsModal() {
                         <input
                             id="api-key-input"
                             type="password"
-                            value={localSettings.apiKey || (state.settings.hasKey ? '********' : '')}
+                            value={localSettings.apiKey === undefined ? '********' : localSettings.apiKey}
                             onChange={(e) => setLocalSettings((s) => ({ ...s, apiKey: e.target.value }))}
                             placeholder="AIza..."
                             style={inputStyle}
@@ -482,8 +489,8 @@ const SettingsModal = memo(function SettingsModal() {
                                     />
                                     <input 
                                         type="password" 
-                                        placeholder="API Key (optional for local Ollama)" 
-                                        value={localSettings.bgApiKey || (state.settings.hasBgKey ? '********' : '')}
+                                        placeholder="Ollama/OpenAI Key (optional)" 
+                                        value={localSettings.bgApiKey === undefined ? '********' : localSettings.bgApiKey}
                                         onChange={e => setLocalSettings(s => ({ ...s, bgApiKey: e.target.value }))}
                                         style={inputStyle} 
                                     />
@@ -528,14 +535,14 @@ const SettingsModal = memo(function SettingsModal() {
                                     <input 
                                         type="password" 
                                         placeholder="Slack Bot Token (xoxb-...)" 
-                                        value={localSettings.slackBotToken || (state.settings.hasSlackBotToken ? '********' : '')}
+                                        value={localSettings.slackBotToken === undefined ? '********' : localSettings.slackBotToken}
                                         onChange={e => setLocalSettings(s => ({ ...s, slackBotToken: e.target.value }))}
                                         style={inputStyle} 
                                     />
                                     <input 
                                         type="password" 
                                         placeholder="Slack App Token (xapp-...)" 
-                                        value={localSettings.slackAppToken || (state.settings.hasSlackAppToken ? '********' : '')}
+                                        value={localSettings.slackAppToken === undefined ? '********' : localSettings.slackAppToken}
                                         onChange={e => setLocalSettings(s => ({ ...s, slackAppToken: e.target.value }))}
                                         style={inputStyle} 
                                     />
