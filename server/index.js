@@ -216,16 +216,18 @@ app.post('/api/config/save', (req, res) => {
     const currentSettings = getSettings();
     
     // If apiKey is provided as '********', keep current one
-    if (newSettings.apiKey === '********' || !newSettings.apiKey) {
+    if (newSettings.apiKey === '********' || newSettings.apiKey === undefined || newSettings.apiKey === '') {
         newSettings.apiKey = currentSettings.apiKey;
     }
-    if (newSettings.bgApiKey === '********' || !newSettings.bgApiKey) {
+    if (newSettings.bgApiKey === '********' || newSettings.bgApiKey === undefined || newSettings.bgApiKey === '') {
         newSettings.bgApiKey = currentSettings.bgApiKey;
     }
-    if (newSettings.slackBotToken === '********' || !newSettings.slackBotToken) {
+    
+    // Handle Slack tokens
+    if (newSettings.slackBotToken === '********' || newSettings.slackBotToken === undefined || newSettings.slackBotToken === '') {
         newSettings.slackBotToken = currentSettings.slackBotToken;
     }
-    if (newSettings.slackAppToken === '********' || !newSettings.slackAppToken) {
+    if (newSettings.slackAppToken === '********' || newSettings.slackAppToken === undefined || newSettings.slackAppToken === '') {
         newSettings.slackAppToken = currentSettings.slackAppToken;
     }
 
@@ -1036,7 +1038,7 @@ app.get('/api/system/check-updates', async (req, res) => {
         const { stdout: branchOut } = await execPromise('git rev-parse --abbrev-ref HEAD');
         const branch = branchOut.trim() || 'master';
         await execPromise(`git fetch origin ${branch}`);
-        const { stdout } = await execPromise(`git rev-list HEAD...origin/${branch} --count`);
+        const { stdout } = await execPromise(`git rev-list HEAD..origin/${branch} --count`);
         const count = parseInt(stdout.trim(), 10);
         res.json({ success: true, updateAvailable: count > 0, behindCount: count });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1047,6 +1049,10 @@ app.post('/api/system/update', async (req, res) => {
         if (!(await isGitAvailable())) {
              return res.status(503).json({ error: "System update impossible: 'git' environment required." });
         }
+        const { stdout: branchOut } = await execPromise('git rev-parse --abbrev-ref HEAD');
+        const branch = branchOut.trim() || 'master';
+        await execPromise(`git reset --hard origin/${branch}`);
+        
         const updaterResponse = await fetch('http://aetheros-updater:8080/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

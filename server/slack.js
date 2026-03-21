@@ -33,6 +33,9 @@ export async function startSlackApp(settings, getSettingsFn, baseUrl, internalTo
     try {
         await stopSlackApp();
 
+        console.log(`[Slack] Starting app with Bot Token: ${settings.slackBotToken ? (settings.slackBotToken.substring(0, 10) + '...') : 'MISSING'}`);
+        console.log(`[Slack] App Token: ${settings.slackAppToken ? (settings.slackAppToken.substring(0, 10) + '...') : 'MISSING'}`);
+
         slackApp = new App({
             token: settings.slackBotToken,
             appToken: settings.slackAppToken,

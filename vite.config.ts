@@ -9,6 +9,7 @@ import YAML from 'yaml';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
+import { startSlackApp, stopSlackApp } from './server/slack.js';
 
 const execPromise = util.promisify(exec);
 
@@ -49,6 +50,8 @@ const apiPlugin = () => {
   const CHAT_HISTORY_FILE = path.join(process.cwd(), 'chat_history.json');
   let cachedModels: any[] = [];
   let lastModelFetch = 0;
+  const INTERNAL_TOKEN = crypto.randomUUID();
+  activeTokens.add(INTERNAL_TOKEN);
 
   // Tactical Monitoring Loop
   const runTacticalMonitor = async () => {
@@ -193,6 +196,11 @@ const apiPlugin = () => {
       setInterval(runBackgroundUpdates, 6 * 60 * 60 * 1000);
       setTimeout(runBackgroundUpdates, 15000); // Wait a bit longer in dev
 
+      // Start Slack Integration
+      const port = server.config.server.port || 5173;
+      console.log(`[AetherOS] Initializing Slack Socket Mode on port ${port}...`);
+      startSlackApp(getSettings(), getSettings, `http://localhost:${port}`, INTERNAL_TOKEN);
+
       // Poll storage occasionally to not block
       const updateStorage = async () => {
         try {
@@ -308,19 +316,23 @@ const apiPlugin = () => {
         try {
           const newSettings = await getBody(req);
           const currentSettings = getSettings();
-          if (newSettings.apiKey === '********') {
+          if (newSettings.apiKey === '********' || newSettings.apiKey === undefined || newSettings.apiKey === '') {
             newSettings.apiKey = currentSettings.apiKey;
           }
-          if (newSettings.bgApiKey === '********') {
+          if (newSettings.bgApiKey === '********' || newSettings.bgApiKey === undefined || newSettings.bgApiKey === '') {
             newSettings.bgApiKey = currentSettings.bgApiKey;
           }
-          if (newSettings.slackBotToken === '********') {
+          if (newSettings.slackBotToken === '********' || newSettings.slackBotToken === undefined || newSettings.slackBotToken === '') {
             newSettings.slackBotToken = currentSettings.slackBotToken;
           }
-          if (newSettings.slackAppToken === '********') {
+          if (newSettings.slackAppToken === '********' || newSettings.slackAppToken === undefined || newSettings.slackAppToken === '') {
             newSettings.slackAppToken = currentSettings.slackAppToken;
           }
           saveSettings(newSettings);
+          
+          const port = server.config.server.port || 5173;
+          startSlackApp(newSettings, getSettings, `http://localhost:${port}`, INTERNAL_TOKEN);
+          
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ success: true }));
         } catch (err: any) { res.statusCode = 500; res.end(JSON.stringify({ error: err.message })); }
@@ -677,11 +689,10 @@ const apiPlugin = () => {
       server.middlewares.use('/api/system/check-updates', async (req: any, res: any) => {
         if (req.method !== 'GET') { res.statusCode = 405; return res.end(); }
         try {
-          // Perform git fetch to see if there are updates
           const { stdout: branchOut } = await execPromise('git rev-parse --abbrev-ref HEAD');
           const branch = branchOut.trim() || 'master';
           await execPromise(`git fetch origin ${branch}`);
-          const { stdout } = await execPromise(`git rev-list HEAD...origin/${branch} --count`);
+          const { stdout } = await execPromise(`git rev-list HEAD..origin/${branch} --count`);
           const count = parseInt(stdout.trim(), 10);
           
           res.setHeader('Content-Type', 'application/json');
@@ -707,10 +718,10 @@ const apiPlugin = () => {
             console.log('Initiating AetherOS update sequence...');
             
             // 1. Pull latest code
-            console.log('Step 1: PULLING DATA CORES (git pull)...');
+            console.log('Step 1: PULLING DATA CORES (git reset --hard)...');
             const { stdout: branchOut } = await execPromise('git rev-parse --abbrev-ref HEAD');
             const branch = branchOut.trim() || 'master';
-            await execPromise(`git pull origin ${branch}`);
+            await execPromise(`git reset --hard origin/${branch}`);
             
             // 2. Install dependencies (if needed, though this is risky in dev, usually just pull code)
             // console.log('Step 2: REBUILDING NEURAL NETWORKS (npm install)...');
