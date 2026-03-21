@@ -3,6 +3,7 @@ import { useAppContext } from '../../context/AppContext';
 import { getAllAgents } from '../../agents';
 import { apiFetch } from '../../utils/api';
 import type { GeminiModel, Settings } from '../../types';
+import SlackHelp from './SlackHelp';
 
 const DEFAULT_MODELS: { id: GeminiModel; label: string; tag?: string; maxTokens?: number }[] = [
     { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', tag: 'PREVIEW' },
@@ -24,6 +25,7 @@ const SettingsModal = memo(function SettingsModal() {
     const [updateAvailable, setUpdateAvailable] = useState<boolean | null>(null);
     const [availableModels, setAvailableModels] = useState<{ id: string; label: string; tag?: string; maxTokens?: number }[]>([]);
     const [isFetchingModels, setIsFetchingModels] = useState(false);
+    const [showSlackHelp, setShowSlackHelp] = useState(false);
 
     const fetchModels = useCallback(async () => {
         setIsFetchingModels(true);
@@ -166,6 +168,32 @@ const SettingsModal = memo(function SettingsModal() {
     }, [availableModels]);
 
     if (!isSettingsOpen) return null;
+
+    if (showSlackHelp) {
+        return (
+            <div
+                style={{
+                    position: 'fixed', inset: 0, zIndex: 1000,
+                    background: 'rgba(0,0,0,0.85)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backdropFilter: 'blur(6px)',
+                }}
+            >
+                <div style={{
+                    background: '#090912',
+                    border: '1px solid var(--lcars-sage)',
+                    borderRadius: 8,
+                    width: '100%',
+                    maxWidth: 580,
+                    maxHeight: '90vh',
+                    overflow: 'auto',
+                    boxShadow: '0 0 40px rgba(187,184,145,0.15)',
+                }}>
+                    <SlackHelp onBack={() => setShowSlackHelp(false)} />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div
@@ -520,15 +548,30 @@ const SettingsModal = memo(function SettingsModal() {
 
                     <Field label="SLACK INTEGRATION" hint="Connect LCARS to your business Slack. Uses Socket Mode (no public IP needed).">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, cursor: 'pointer', fontFamily: 'var(--lcars-font-mono, monospace)', textTransform: 'uppercase' }}>
-                                <input 
-                                    type="checkbox" 
-                                    checked={localSettings.slackEnabled || false}
-                                    onChange={e => setLocalSettings(s => ({ ...s, slackEnabled: e.target.checked }))}
-                                    style={{ accentColor: 'var(--lcars-sage)' }}
-                                />
-                                ENABLE SLACK SOCKET MODE
-                            </label>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, cursor: 'pointer', fontFamily: 'var(--lcars-font-mono, monospace)', textTransform: 'uppercase' }}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={localSettings.slackEnabled || false}
+                                        onChange={e => setLocalSettings(s => ({ ...s, slackEnabled: e.target.checked }))}
+                                        style={{ accentColor: 'var(--lcars-sage)' }}
+                                    />
+                                    ENABLE SLACK SOCKET MODE
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSlackHelp(true)}
+                                    style={{
+                                        background: 'none', border: 'none', color: 'var(--lcars-warning)',
+                                        fontSize: 10, fontFamily: 'var(--font-display)', fontWeight: 700,
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                                        padding: '2px 6px', borderLeft: '2px solid var(--lcars-warning)'
+                                    }}
+                                >
+                                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>help</span>
+                                    HELP / SETUP GUIDE
+                                </button>
+                            </div>
                             
                             {localSettings.slackEnabled && (
                                 <>
