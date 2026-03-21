@@ -1,5 +1,6 @@
 import pkg from '@slack/bolt';
 const { App } = pkg;
+import { WebClient } from '@slack/web-api';
 import { runAgentLoop, AGENTS, TOOLS } from './agent.js';
 import fs from 'fs';
 import path from 'path';
@@ -11,6 +12,19 @@ const DATA_DIR = path.join(__dirname, '../data');
 const CHAT_FILE = path.join(DATA_DIR, 'chat_history.json');
 
 let slackApp = null;
+
+// Prevent Slack-related unhandled rejections from killing the process
+// This is critical for keeping the dashboard accessible even if Slack auth fails.
+if (typeof process !== 'undefined') {
+    process.on('unhandledRejection', (reason, promise) => {
+        if (reason && reason.toString().includes('slack')) {
+            console.error('[Slack] CAUGHT UNHANDLED REJECTION:', reason.message || reason);
+        } else {
+            // Log other rejections but don't exit if possible (depends on Node version/flags)
+            console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+        }
+    });
+}
 
 export async function stopSlackApp() {
     if (slackApp) {
@@ -45,6 +59,21 @@ export async function startSlackApp(settings, getSettingsFn, baseUrl, internalTo
         }
 
         console.log(`[Slack] Initializing Socket Mode...`);
+
+        // Defensive: Test the bot token manually first to avoid internal Bolt crashes
+        if (isBotToken) {
+            try {
+                const testClient = new WebClient(settings.slackBotToken);
+                await testClient.auth.test();
+                console.log("[Slack] Bot Token verified.");
+            } catch (authErr) {
+                console.error("[Slack] INITIAL AUTH TEST FAILED:", authErr.message);
+                if (authErr.message.includes('invalid_auth')) {
+                    console.error("[Slack] Aborting startup to prevent crash. Please check your tokens.");
+                    return;
+                }
+            }
+        }
 
         slackApp = new App({
             token: settings.slackBotToken,
