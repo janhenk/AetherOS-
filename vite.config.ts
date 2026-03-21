@@ -9,7 +9,8 @@ import YAML from 'yaml';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
-import { startSlackApp, stopSlackApp } from './server/slack.js';
+// @ts-ignore
+import { startSlackApp } from './server/slack.js';
 
 const execPromise = util.promisify(exec);
 
