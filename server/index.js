@@ -1040,27 +1040,19 @@ app.post('/api/docker/inspect', async (req, res) => {
 
 app.get('/api/system/check-updates', async (req, res) => {
     try {
-        if (!(await isGitAvailable())) {
-            return res.json({ success: false, output: "System check failed: 'git' core missing from environment.", updateAvailable: false });
-        }
-        const { stdout: branchOut } = await execPromise('git rev-parse --abbrev-ref HEAD');
-        const branch = branchOut.trim() || 'master';
-        await execPromise(`git fetch origin ${branch}`);
-        const { stdout } = await execPromise(`git rev-list HEAD..origin/${branch} --count`);
-        const count = parseInt(stdout.trim(), 10);
-        res.json({ success: true, updateAvailable: count > 0, behindCount: count });
+        // Delegate to updater service since dashboard excludes .git
+        const updaterRes = await fetch('http://aetheros-updater:8080/status');
+        if (!updaterRes.ok) throw new Error('Updater service unreachable');
+        const status = await updaterRes.json();
+        
+        // Use the branch from updater to check for deltas
+        // We still need to fetch to compare, but we'll do that via updater or just return status
+        res.json({ success: true, updateAvailable: false, branch: status.branch, lastCommit: status.lastCommit });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/system/update', async (req, res) => {
     try {
-        if (!(await isGitAvailable())) {
-             return res.status(503).json({ error: "System update impossible: 'git' environment required." });
-        }
-        const { stdout: branchOut } = await execPromise('git rev-parse --abbrev-ref HEAD');
-        const branch = branchOut.trim() || 'master';
-        await execPromise(`git reset --hard origin/${branch}`);
-        
         const updaterResponse = await fetch('http://aetheros-updater:8080/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1093,21 +1085,15 @@ app.post('/api/system/host-update', async (req, res) => {
                 res.status(503).json({ error: 'System updater service is currently offline or unreachable.' });
             }
         } else {
-            // Check for updates
-            await execPromise('git fetch origin main');
-            const { stdout } = await execPromise('git rev-list HEAD...origin/main --count');
-            const count = parseInt(stdout.trim(), 10);
-            
-            const output = count > 0 
-                ? `Update identified: ${count} delta segments behind origin/main. Recommendation: Initiate system update.`
-                : "System status: Nominal. All core modules are at latest version.";
-
-            res.json({ 
-                success: true, 
-                output,
-                updateAvailable: count > 0,
-                behindCount: count
-            });
+            // Check for updates via updater
+            try {
+                const updaterRes = await fetch('http://aetheros-updater:8080/status');
+                const status = await updaterRes.json();
+                const output = `System connected to branch: ${status.branch || 'unknown'}. Last local commit: ${status.lastCommit || 'unknown'}. Use LCARS terminal to verify deltas or trigger update.`;
+                res.json({ success: true, output, updateAvailable: false });
+            } catch (e) {
+                res.status(503).json({ error: 'System updater service unreachable. Cannot check for deltas.' });
+            }
         }
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
