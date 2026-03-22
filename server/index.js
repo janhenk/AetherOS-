@@ -977,6 +977,14 @@ app.post('/api/docker/action', async (req, res) => {
         const { id, action } = req.body;
         if (!id || !action) throw new Error('Container ID and action required');
 
+        // SAFEGUARD: Prevent self-destruction or accidental restarts of the dashboard container
+        const targetId = id.replace(/^\//, '');
+        if (targetId === 'aetheros-dashboard' && (action === 'restart' || action === 'stop' || action === 'rm')) {
+            const msg = `Security Protocol Violation: Action '${action}' on core module '${targetId}' is blocked to prevent system blackout.`;
+            auditLog('SYSTEM', 'DOCKER_ACTION_BLOCKED', { id: targetId, action }, false);
+            return res.status(403).json({ error: msg });
+        }
+
         let cmd = '';
         switch (action) {
             case 'start': cmd = `docker start "${id}"`; break;
