@@ -49,26 +49,49 @@ app.post('/update', (req, res) => {
 
     try {
       logBatch('--- SYSTEM UPDATE SEQUENCE STARTING ---');
+      logBatch(`Working Directory: /app`);
+      logBatch(`User: ${process.env.USER || 'root'}`);
       
       const cmd = `
         set -e
         cd /app
+        echo "Configuring git safety..."
         git config --global --add safe.directory /app
-        echo "Fetching updates from origin..."
+        
+        echo "Fetching all updates..."
         git fetch --all --prune
         
+        # Robust branch detection
         BRANCH=$(git rev-parse --abbrev-ref HEAD)
-        echo "Synchronizing with origin/$BRANCH..."
+        if [ "$BRANCH" = "HEAD" ]; then
+          echo "Detached HEAD detected. Defaulting to 'master' for sync."
+          BRANCH="master"
+        fi
+        
+        echo "Target sync branch: origin/$BRANCH"
         git reset --hard origin/$BRANCH
         
-        echo "Initiating dashboard rebuild..."
+        echo "Verifying local file sync..."
+        git log -1 --format="%h %s"
+        
+        echo "Initiating dashboard rebuild via socket proxy..."
+        # We use 'docker compose' as a plugin, ensuring we rebuild ONLY the dashboard
         docker compose build --no-cache aetheros-dashboard
         
         echo "Restarting core modules..."
         docker compose up -d aetheros-dashboard
+        
+        echo "Pruning old images..."
+        docker image prune -f
       `;
 
-      const { stdout, stderr } = await execPromise(cmd, { env: { ...process.env, DOCKER_HOST: 'tcp://docker-socket-proxy:2375' } });
+      const { stdout, stderr } = await execPromise(cmd, { 
+        env: { 
+          ...process.env, 
+          DOCKER_HOST: 'tcp://docker-socket-proxy:2375',
+          COMPOSE_PROJECT_NAME: 'aetheros' // explicitly set project name to avoid mismatches
+        } 
+      });
       
       if (stdout) logBatch(`STDOUT:\n${stdout}`);
       if (stderr) logBatch(`STDERR:\n${stderr}`);
