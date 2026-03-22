@@ -39,8 +39,12 @@ export async function stopSlackApp() {
 }
 
 export async function startSlackApp(settings, getSettingsFn, baseUrl, internalToken) {
-    if (!settings.slackBotToken || !settings.slackAppToken || !settings.slackEnabled) {
-        console.log("Slack integration is disabled or missing tokens.");
+    if (!settings.slackEnabled) {
+        console.log("[Slack] Integration disabled in settings.");
+        return;
+    }
+    if (!settings.slackBotToken || !settings.slackAppToken) {
+        console.warn("[Slack] Configuration incomplete: Bot Token or App Token missing.");
         return;
     }
 
@@ -110,21 +114,75 @@ export async function startSlackApp(settings, getSettingsFn, baseUrl, internalTo
     }
 }
 
+const CHANNEL_AGENTS_FILE = path.join(DATA_DIR, 'channel_agents.json');
+
 async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, internalToken) {
     try {
-        const text = event.text.replace(/<@[^>]+>/g, '').trim(); // Remove mention
-        const threadTs = event.thread_ts || event.ts;
-        const sessionId = `slack_${event.channel}_${threadTs}`;
-
-        // Determine agent ID from text (e.g., "nav, status" or just default)
-        let agentId = 'comms'; // default
-        for (const agent of AGENTS) {
-            if (text.toLowerCase().startsWith(agent.id.toLowerCase())) {
-                agentId = agent.id;
-                // remove the prefix
-                break;
-            }
+        const isDM = event.channel_type === 'im';
+        
+        // Defensive: Some message events might not have text (e.g. file shares, deletions)
+        if (!event.text) {
+            console.log(`[Slack] Skipping event without text (type: ${event.type}, subtype: ${event.subtype})`);
+            return;
         }
+
+        const rawText = event.text.replace(/<@[^>]+>/g, '').trim(); 
+        const threadTs = event.thread_ts || event.ts;
+        
+        // For DMs, use the channel ID as the session to preserve history across messages.
+        // For channels, continue using thread_ts to keep separate conversation threads.
+        const sessionId = isDM ? `slack_${event.channel}` : `slack_${event.channel}_${threadTs}`;
+
+        // Handle Help/List commands
+        if (['help', 'list', 'agents', 'hi', 'hello'].includes(rawText.toLowerCase())) {
+            const agentList = AGENTS.map(a => `*${a.id}* - ${a.name} (${a.shortName})`).join('\n');
+            await say({
+                text: `*AetherOS Slack Integration Help*\n\nTo interact with an AI agent, prefix your message with its ID (e.g., \`nav status\`). In DMs, I remember which agent you last spoke to!\n\n*Available Agents:*\n${agentList}\n\n_System status: Nominal._`,
+                thread_ts: event.ts // Use event.ts to reply to the specific message even in DMs
+            });
+            return;
+        }
+
+        // Determine agent ID
+        let agentId = null;
+        let cleanText = rawText;
+
+        // 1. Try to match prefix (id, name, or shortName)
+        for (const agent of AGENTS) {
+            const patterns = [
+                agent.id.toLowerCase(),
+                agent.name.toLowerCase(),
+                agent.shortName.toLowerCase()
+            ];
+            
+            for (const p of patterns) {
+                if (rawText.toLowerCase().startsWith(p)) {
+                    agentId = agent.id;
+                    // Remove the prefix from the text to the LLM
+                    if (rawText.toLowerCase().startsWith(p + ' ') || rawText.toLowerCase().startsWith(p + ':') || rawText.toLowerCase() === p) {
+                         cleanText = rawText.slice(p.length).replace(/^[:\s,]+/, '');
+                    }
+                    break;
+                }
+            }
+            if (agentId) break;
+        }
+
+        // 2. Sticky Agent Logic: Load last used agent for this channel if in a DM
+        let channelAgents = {};
+        if (fs.existsSync(CHANNEL_AGENTS_FILE)) {
+            try { channelAgents = JSON.parse(fs.readFileSync(CHANNEL_AGENTS_FILE, 'utf8')); } catch (e) {}
+        }
+
+        if (!agentId && isDM) {
+            agentId = channelAgents[event.channel] || 'comms';
+        } else if (!agentId) {
+            agentId = 'comms'; // Default for channels if no mention/prefix matched
+        }
+
+        // Save current agent as sticky for this channel
+        channelAgents[event.channel] = agentId;
+        fs.writeFileSync(CHANNEL_AGENTS_FILE, JSON.stringify(channelAgents, null, 2));
         
         // Let user know we are thinking
         const thinkingMsg = await say({ text: `_AetherOS ${agentId.toUpperCase()} is processing..._`, thread_ts: threadTs });
@@ -138,7 +196,7 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
         const systemInstruction = settings.agentOverrides?.[agentId]?.systemPrompt || agentDef.systemPrompt;
         
         // Add context to the prompt
-        const fullPrompt = `${text}\n\n[CONTEXT: User reached out via Slack. Keep response formatted nicely for Slack Markdown (*bold*, _italic_, \`code\`).]`;
+        const fullPrompt = `${cleanText}\n\n[CONTEXT: User reached out via Slack ${isDM ? 'Direct Message' : 'Channel'}. Keep response formatted nicely for Slack Markdown (*bold*, _italic_, \`code\`).]`;
 
         // Run Loop
         const newHistory = await runAgentLoop(agentId, fullPrompt, systemInstruction, history, settings, TOOLS, baseUrl, internalToken);
@@ -151,14 +209,13 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
         const responseMsgs = newHistory.filter(m => m.role === 'agent');
         let finalResponse = "Task completed without text output.";
         if (responseMsgs.length > 0) {
-            // grab the last message that isn't a tool marker
             const nonToolMsgs = responseMsgs.filter(m => !m.content.startsWith('TOOL_'));
             if (nonToolMsgs.length > 0) {
                 finalResponse = nonToolMsgs[nonToolMsgs.length - 1].content;
             }
         }
 
-        // Post back using Slack client to update the placeholder message
+        // Post back
         if (thinkingMsg.ts && thinkingMsg.channel) {
             await client.chat.update({
                 channel: thinkingMsg.channel,
