@@ -139,14 +139,15 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                     }
                 }));
 
+                const modelName = settings.bgModelName || 'llama3.2';
                 const openaiPayload = {
-                    model: settings.bgModelName || 'llama3.2',
+                    model: modelName,
                     messages: requestHistory,
                     temperature: settings.temperature || 0.7,
                     tools: openaiTools.length > 0 ? openaiTools : undefined
                 };
 
-                const res = await fetch(`${settings.bgBaseUrl}/chat/completions`, {
+                let res = await fetch(`${settings.bgBaseUrl}/chat/completions`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -154,6 +155,36 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                     },
                     body: JSON.stringify(openaiPayload)
                 });
+
+                // AUTO-PULL LOGIC FOR OLLAMA
+                if (res.status === 404 && settings.bgBaseUrl?.includes('11434')) {
+                    const errorData = await res.json().catch(() => ({}));
+                    if (errorData.error?.includes('not found') || errorData.message?.includes('not found')) {
+                        console.log(`[Ollama] Model '${modelName}' not found. Attempting to pull...`);
+                        
+                        // Derived Ollama API URL (assuming bgBaseUrl is something like http://localhost:11434/v1)
+                        const ollamaBase = settings.bgBaseUrl.replace(/\/v1\/?$/, '');
+                        const pullRes = await fetch(`${ollamaBase}/api/pull`, {
+                            method: 'POST',
+                            body: JSON.stringify({ name: modelName, stream: false })
+                        });
+
+                        if (pullRes.ok) {
+                            console.log(`[Ollama] Successfully pulled '${modelName}'. Retrying request...`);
+                            // Retry the original request
+                            res = await fetch(`${settings.bgBaseUrl}/chat/completions`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    ...(settings.bgApiKey ? { 'Authorization': `Bearer ${settings.bgApiKey}` } : {})
+                                },
+                                body: JSON.stringify(openaiPayload)
+                            });
+                        } else {
+                            throw new Error(`Ollama model '${modelName}' missing and failed to pull: ${pullRes.statusText}`);
+                        }
+                    }
+                }
 
                 if (!res.ok) throw new Error(`OpenAI API error ${res.statusText}`);
                 const data = await res.json();
