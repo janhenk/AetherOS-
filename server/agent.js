@@ -159,7 +159,9 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                 // AUTO-PULL LOGIC FOR OLLAMA
                 if (res.status === 404 && settings.bgBaseUrl?.includes('11434')) {
                     const errorData = await res.json().catch(() => ({}));
-                    if (errorData.error?.includes('not found') || errorData.message?.includes('not found')) {
+                    const errorString = JSON.stringify(errorData).toLowerCase();
+                    
+                    if (errorString.includes('not found')) {
                         console.log(`[Ollama] Model '${modelName}' not found. Attempting to pull...`);
                         
                         // Derived Ollama API URL (assuming bgBaseUrl is something like http://localhost:11434/v1)
