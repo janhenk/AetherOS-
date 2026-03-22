@@ -183,7 +183,9 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                                 body: JSON.stringify(openaiPayload)
                             });
                         } else {
-                            throw new Error(`Ollama model '${modelName}' missing and failed to pull: ${pullRes.statusText}`);
+                            const pullError = await pullRes.json().catch(() => ({}));
+                            const msg = pullError.error || pullRes.statusText;
+                            throw new Error(`Ollama model '${modelName}' pull failed: ${msg}. (Note: Check if the model name is valid in the Ollama registry).`);
                         }
                     }
                 }

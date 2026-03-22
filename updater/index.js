@@ -27,12 +27,16 @@ function execPromise(cmd, options = {}) {
 
 app.get('/status', async (req, res) => {
   try {
+    const gitExists = fs.existsSync('/app/.git');
+    if (!gitExists) {
+        return res.json({ status: 'Awaiting Git', error: '.git folder not found in /app. Update impossible.' });
+    }
     const gitCmd = `cd /app && git config --global --add safe.directory /app && git rev-parse --abbrev-ref HEAD && git log -1 --format="%h %s"`;
     const { stdout } = await execPromise(gitCmd);
     const [branch, lastCommit] = stdout.trim().split('\n');
-    res.json({ branch, lastCommit, status: 'Updater online' });
+    res.json({ branch, lastCommit, status: 'Updater online', gitAvailable: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, gitAvailable: false });
   }
 });
 
