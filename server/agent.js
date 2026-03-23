@@ -81,6 +81,15 @@ export async function executeTool(agentId, call, baseUrl, internalToken) {
         } else if (name === 'scheduleTask') {
             const res = await apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify({ agentId, prompt: args.prompt, delayMinutes: args.delayMinutes }) });
             result = await res.json();
+        } else if (name === 'listCronJobs') {
+            const res = await apiFetch('/api/cron/jobs');
+            result = await res.json();
+        } else if (name === 'createCronJob') {
+            const res = await apiFetch('/api/cron/jobs', { method: 'POST', body: JSON.stringify(args) });
+            result = await res.json();
+        } else if (name === 'deleteCronJob') {
+            const res = await apiFetch(`/api/cron/jobs/${args.id}`, { method: 'DELETE' });
+            result = await res.json();
         }
     } catch (err) {
         return { error: err.message };
@@ -443,15 +452,32 @@ export const TOOLS = [{
             }
         },
         {
-            name: 'scheduleTask',
-            description: 'Schedules a task to be executed after a delay by sending a prompt back to you.',
+            name: 'listCronJobs',
+            description: 'Returns a list of all currently scheduled recurring tasks (Cron jobs).',
+            parameters: { type: 'OBJECT', properties: {} }
+        },
+        {
+            name: 'createCronJob',
+            description: 'Schedules a recurring task utilizing a cron expression. Use this for automating regular agent checks or system actions.',
             parameters: {
                 type: 'OBJECT',
                 properties: {
-                    delayMinutes: { type: 'NUMBER', description: 'The delay in minutes before the prompt is sent back to you.' },
-                    prompt: { type: 'STRING', description: 'The message/prompt to send to yourself when the delay elapses.' }
+                    name: { type: 'STRING', description: 'Descriptive name of the task' },
+                    schedule: { type: 'STRING', description: 'Cron expression (e.g. "0 8 * * *" for daily at 8 AM, "* * * * *" for every minute)' },
+                    agentId: { type: 'STRING', description: 'The ID of the agent to trigger (e.g. "nav")' },
+                    prompt: { type: 'STRING', description: 'The prompt to send to the agent when triggered' },
+                    enabled: { type: 'BOOLEAN', description: 'Whether the task is active' }
                 },
-                required: ['delayMinutes', 'prompt']
+                required: ['name', 'schedule', 'agentId', 'prompt']
+            }
+        },
+        {
+            name: 'deleteCronJob',
+            description: 'Deletes a recurring task by its unique ID.',
+            parameters: {
+                type: 'OBJECT',
+                properties: { id: { type: 'STRING', description: 'ID of the job to delete' } },
+                required: ['id']
             }
         }
     ]
