@@ -20,7 +20,13 @@ export interface Settings {
     isSandboxNetworkEnabled?: boolean;
     registries?: { server: string; username: string }[];
     isYoloMode?: boolean;
-    agentOverrides?: Record<string, { name?: string; shortName?: string; systemPrompt?: string }>;
+    agentOverrides?: Record<string, { 
+        name?: string; 
+        shortName?: string; 
+        systemPrompt?: string; 
+        bgProvider?: 'gemini' | 'openai'; 
+        bgModelName?: string; 
+    }>;
 
     // Background Autonomous Agent Settings
     bgProvider?: 'gemini' | 'openai';

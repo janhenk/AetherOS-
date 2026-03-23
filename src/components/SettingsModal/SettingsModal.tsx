@@ -388,13 +388,71 @@ const SettingsModal = memo(function SettingsModal() {
                                             }))}
                                             style={{ 
                                                 ...inputStyle, 
-                                                height: 120, 
+                                                height: 80, 
                                                 resize: 'vertical', 
                                                 fontSize: 11, 
                                                 lineHeight: 1.5,
                                                 fontFamily: 'var(--font-mono)'
                                             }}
                                         />
+                                    </div>
+
+                                    {/* Per-Agent LLM Provider */}
+                                    <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: 10, marginTop: 4 }}>
+                                        <div style={{ fontSize: 9, color: 'var(--lcars-sage)', marginBottom: 8, letterSpacing: '0.1em' }}>AUTONOMOUS PROTOCOL ENGINE</div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', gap: 4, background: '#050505', padding: 2, borderRadius: 20, border: '1px solid #2a2a2a' }}>
+                                                <button
+                                                    onClick={() => setLocalSettings(s => ({
+                                                        ...s,
+                                                        agentOverrides: {
+                                                            ...s.agentOverrides,
+                                                            [a.id]: { ...(s.agentOverrides?.[a.id] || {}), bgProvider: 'gemini' }
+                                                        }
+                                                    }))}
+                                                    style={{
+                                                        ...pillBtnStyle,
+                                                        padding: '4px 10px', fontSize: 9,
+                                                        background: (a.bgProvider || localSettings.bgProvider || 'gemini') === 'gemini' ? 'var(--lcars-sage)' : 'transparent',
+                                                        color: (a.bgProvider || localSettings.bgProvider || 'gemini') === 'gemini' ? '#141414' : 'var(--lcars-text-dim)',
+                                                        border: 'none',
+                                                    }}
+                                                >GEMINI</button>
+                                                <button
+                                                    onClick={() => setLocalSettings(s => ({
+                                                        ...s,
+                                                        agentOverrides: {
+                                                            ...s.agentOverrides,
+                                                            [a.id]: { ...(s.agentOverrides?.[a.id] || {}), bgProvider: 'openai' }
+                                                        }
+                                                    }))}
+                                                    style={{
+                                                        ...pillBtnStyle,
+                                                        padding: '4px 10px', fontSize: 9,
+                                                        background: (a.bgProvider || localSettings.bgProvider) === 'openai' ? 'var(--lcars-sage)' : 'transparent',
+                                                        color: (a.bgProvider || localSettings.bgProvider) === 'openai' ? '#141414' : 'var(--lcars-text-dim)',
+                                                        border: 'none',
+                                                    }}
+                                                >OLLAMA</button>
+                                            </div>
+
+                                            <div style={{ flex: 1, minWidth: 150 }}>
+                                                <input 
+                                                    type="text" 
+                                                    placeholder={ (a.bgProvider || localSettings.bgProvider || 'gemini') === 'gemini' ? "Model (e.g. gemini-2.0-flash)" : "Model (e.g. llama3.2)" }
+                                                    value={a.bgModelName || ''}
+                                                    onChange={(e) => setLocalSettings(s => ({
+                                                        ...s,
+                                                        agentOverrides: {
+                                                            ...s.agentOverrides,
+                                                            [a.id]: { ...(s.agentOverrides?.[a.id] || {}), bgModelName: e.target.value }
+                                                        }
+                                                    }))}
+                                                    style={{ ...inputStyle, padding: '4px 10px', fontSize: 10, borderLeft: '2px solid var(--lcars-sage)' }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: 8, color: '#444', marginTop: 4 }}>OVERRIDING GLOBAL DEFAULTS FOR THIS UNIT.</div>
                                     </div>
                                 </div>
                             </details>

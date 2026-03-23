@@ -110,19 +110,22 @@ export async function executeTool(agentId, call, baseUrl, internalToken) {
 }
 
 export async function runAgentLoop(agentId, initialPrompt, systemInstruction, history, settings, tools, baseUrl, internalToken) {
+    const overrides = settings.agentOverrides?.[agentId] || {};
+    const agentSettings = { ...settings, ...overrides };
+    
     let currentHistory = [...history, { role: 'user', content: initialPrompt, timestamp: new Date().toISOString() }];
-    const limit = settings.bgIterationLimit || 5;
+    const limit = agentSettings.bgIterationLimit || 5;
     let iteration = 0;
 
     while (iteration < limit) {
         iteration++;
-        const provider = settings.bgProvider || 'gemini';
+        const provider = agentSettings.bgProvider || 'gemini';
         let functionCalls = [];
         let agentResponseText = '';
 
         try {
             if (provider === 'gemini') {
-                const ai = new GoogleGenAI({ apiKey: settings.bgApiKey || settings.apiKey });
+                const ai = new GoogleGenAI({ apiKey: agentSettings.bgApiKey || agentSettings.apiKey });
                 const requestHistory = currentHistory.map(msg => ({
                     role: msg.role === 'agent' ? 'model' : msg.role,
                     parts: [{ text: msg.content }]
@@ -130,12 +133,12 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                 console.log(`[AGENT DIAG] Iteration ${iteration}: Calling LLM (GEMINI)...`);
                 const startLLM = Date.now();
                 const res = await ai.models.generateContent({
-                    model: settings.bgModelName || settings.model || 'gemini-2.0-flash',
+                    model: agentSettings.bgModelName || agentSettings.model || 'gemini-2.0-flash',
                     contents: requestHistory,
                     config: {
                         systemInstruction: systemInstruction,
                         tools: tools,
-                        temperature: settings.temperature || 0.7
+                        temperature: agentSettings.temperature || 0.7
                     }
                 }, { timeout: 3600000 }); // 1 hour timeout for Gemini
                 console.log(`[AGENT DIAG] GEMINI responded in ${Date.now() - startLLM}ms`);
@@ -163,21 +166,21 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                     }
                 }));
 
-                const modelName = settings.bgModelName || 'llama3.2';
+                const modelName = agentSettings.bgModelName || 'llama3.2';
                 const openaiPayload = {
                     model: modelName,
                     messages: requestHistory,
-                    temperature: settings.temperature || 0.7,
+                    temperature: agentSettings.temperature || 0.7,
                     tools: openaiTools.length > 0 ? openaiTools : undefined
                 };
 
                 console.log(`[AGENT DIAG] Iteration ${iteration}: Calling LLM (OPENAI/OLLAMA)...`);
                 const startLLM = Date.now();
-                let res = await fetch(`${settings.bgBaseUrl}/chat/completions`, {
+                let res = await fetch(`${agentSettings.bgBaseUrl}/chat/completions`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        ...(settings.bgApiKey ? { 'Authorization': `Bearer ${settings.bgApiKey}` } : {})
+                        ...(agentSettings.bgApiKey ? { 'Authorization': `Bearer ${agentSettings.bgApiKey}` } : {})
                     },
                     body: JSON.stringify(openaiPayload),
                     signal: AbortSignal.timeout(3600000) // 1 hour timeout
@@ -185,7 +188,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                 console.log(`[AGENT DIAG] OPENAI/OLLAMA responded with status ${res.status} in ${Date.now() - startLLM}ms`);
 
                 // AUTO-PULL LOGIC FOR OLLAMA
-                if (res.status === 404 && settings.bgBaseUrl?.includes('11434')) {
+                if (res.status === 404 && agentSettings.bgBaseUrl?.includes('11434')) {
                     const errorData = await res.json().catch(() => ({}));
                     const errorString = JSON.stringify(errorData).toLowerCase();
                     
@@ -193,7 +196,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                         console.log(`[Ollama] Model '${modelName}' not found. Attempting to pull...`);
                         
                         // Derived Ollama API URL (assuming bgBaseUrl is something like http://localhost:11434/v1)
-                        const ollamaBase = settings.bgBaseUrl.replace(/\/v1\/?$/, '');
+                        const ollamaBase = agentSettings.bgBaseUrl.replace(/\/v1\/?$/, '');
                         const pullRes = await fetch(`${ollamaBase}/api/pull`, {
                             method: 'POST',
                             body: JSON.stringify({ name: modelName, stream: false }),
@@ -205,11 +208,11 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                             // Retry the original request
                             console.log(`[AGENT DIAG] Ollama Retrying request...`);
                             const startRetry = Date.now();
-                            res = await fetch(`${settings.bgBaseUrl}/chat/completions`, {
+                            res = await fetch(`${agentSettings.bgBaseUrl}/chat/completions`, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
-                                    ...(settings.bgApiKey ? { 'Authorization': `Bearer ${settings.bgApiKey}` } : {})
+                                    ...(agentSettings.bgApiKey ? { 'Authorization': `Bearer ${agentSettings.bgApiKey}` } : {})
                                 },
                                 body: JSON.stringify(openaiPayload),
                                 signal: AbortSignal.timeout(3600000) // 1 hour timeout
@@ -262,7 +265,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
             console.error(`[AGENT DIAG] FATAL ERROR in runAgentLoop:`, err);
             currentHistory.push({
                 role: 'agent',
-                content: `⚠ BACKGROUND AGENT ERROR: ${err.message} (Iteration: ${iteration}, Provider: ${settings.bgProvider || 'gemini'})`,
+                content: `⚠ BACKGROUND AGENT ERROR: ${err.message} (Iteration: ${iteration}, Provider: ${agentSettings.bgProvider || 'gemini'})`,
                 timestamp: new Date().toISOString()
             });
             break;

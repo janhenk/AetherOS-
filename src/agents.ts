@@ -7,6 +7,8 @@ export interface AgentDefinition {
     icon: string;
     color: string;
     systemPrompt: string;
+    bgProvider?: 'gemini' | 'openai';
+    bgModelName?: string;
 }
 
 export const AGENTS: AgentDefinition[] = [
