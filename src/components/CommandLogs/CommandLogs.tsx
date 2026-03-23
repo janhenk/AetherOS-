@@ -29,7 +29,17 @@ const MARKDOWN_COMPONENTS: any = {
     h2: ({ node, ...props }: any) => <h2 className="text-base font-bold text-white mt-3 mb-2 tracking-wide" {...props} />,
     h3: ({ node, ...props }: any) => <h3 className="text-sm font-bold text-white/90 mt-2 mb-1 tracking-wide" {...props} />,
     hr: ({ node, ...props }: any) => <hr className="border-primary/20 my-4" {...props} />,
-    blockquote: ({ node, ...props }: any) => <blockquote className="border-l-2 border-primary/50 pl-3 my-2 italic text-white/60 bg-primary/5 py-1 pr-2 rounded-r" {...props} />
+    blockquote: ({ node, children, ...props }: any) => {
+        const text = String(children?.[0]?.props?.children || children?.[0] || '');
+        if (text.includes('Executing')) {
+            return (
+                <code className="inline-block bg-primary/10 text-primary/80 border border-primary/20 rounded-full px-3 py-0.5 my-1 text-[10px] font-bold tracking-tight italic" {...props}>
+                    {children}
+                </code>
+            );
+        }
+        return <blockquote className="border-l-2 border-primary/50 pl-3 my-2 italic text-white/60 bg-primary/5 py-1 pr-2 rounded-r" {...props}>{children}</blockquote>;
+    }
 };
 
 const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
@@ -197,7 +207,7 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
 
                         messages.forEach((msg, idx) => {
                             const isToolResult = msg.content.startsWith('TOOL_RESPONSE:') || msg.content.startsWith('TOOL_ERROR:');
-                            const isPureToolCall = (msg.toolCalls?.length || 0) > 0 && (msg.content.trim().length < 50 || msg.content.includes('Executing'));
+                            const isPureToolCall = (msg.toolCalls?.length || 0) > 0 || msg.content.includes('Executing') || msg.content.includes('PROTOCOL OPERATIONS');
 
                             if (isToolResult || isPureToolCall) {
                                 currentCluster.push(msg);
