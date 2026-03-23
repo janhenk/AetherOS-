@@ -228,7 +228,14 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
 
                         messages.forEach((msg, idx) => {
                             const isToolResult = msg.content.startsWith('TOOL_RESPONSE:') || msg.content.startsWith('TOOL_ERROR:');
-                            const isPureToolCall = (msg.toolCalls?.length || 0) > 0 || msg.content.includes('Executing') || msg.content.includes('PROTOCOL OPERATIONS');
+                            
+                            // A message is a "pure tool call" only if it has actual toolCalls 
+                            // OR its content is ONLY the "Executing... tools..." pattern (no extra text).
+                            const executingRegex = /^\s*(>\s*)?Executing \d+ system tools\.\.\.[\s]*$/;
+                            const isExecutingOnly = executingRegex.test(msg.content);
+                            const hasProtocolPlaceholder = msg.content.includes('PROTOCOL OPERATIONS');
+                            
+                            const isPureToolCall = (msg.toolCalls?.length || 0) > 0 || isExecutingOnly || hasProtocolPlaceholder;
 
                             if (isToolResult || isPureToolCall) {
                                 currentCluster.push(msg);
