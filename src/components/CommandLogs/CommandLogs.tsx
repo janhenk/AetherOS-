@@ -112,91 +112,149 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                 {(messages || []).length === 0 ? (
                     <p className="opacity-50">Log initialized. Awaiting input...</p>
                 ) : (
-                    messages.map((msg) => {
-                        let colorClass = 'text-primary/60'; // Default agent
-                        if (msg.role === 'user') colorClass = 'text-secondary/60';
-                        if (msg.role === 'agent' && msg.content.includes('[MAIN VIEWSCREEN]')) colorClass = 'text-emerald-500/60';
+                    (() => {
+                        const renderedElements: React.ReactNode[] = [];
+                        let currentCluster: any[] = [];
 
-                        const isExpanded = expandedToolIds.has(msg.id);
-                        const isToolResult = msg.content.startsWith('TOOL_RESPONSE:') || msg.content.startsWith('TOOL_ERROR:');
-
-                        if (isToolResult) {
-                            const isError = msg.content.startsWith('TOOL_ERROR:');
-                            const prefix = isError ? 'TOOL_ERROR:' : 'TOOL_RESPONSE:';
-                            const remaining = msg.content.slice(prefix.length);
-                            const colonIdx = remaining.indexOf(':');
-                            const toolName = remaining.slice(0, colonIdx);
-                            const resultStr = remaining.slice(colonIdx + 1);
+                        const flushCluster = (timestamp: any) => {
+                            if (currentCluster.length === 0) return;
+                            const clusterId = `cluster-${currentCluster[0].id}`;
+                            const isClusterExpanded = expandedToolIds.has(clusterId);
                             
-                            let parsedResult = resultStr;
-                            try {
-                                const json = JSON.parse(resultStr);
-                                parsedResult = JSON.stringify(json, null, 2);
-                            } catch (e) {
-                                // Not JSON, keep as is
-                            }
+                            renderedElements.push(
+                                <div key={clusterId} className="flex flex-col gap-2 my-2 ml-14">
+                                    <button 
+                                        onClick={() => toggleToolExpand(clusterId)}
+                                        className="flex items-center gap-3 self-start rounded-full bg-primary/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary/60 border border-primary/10 hover:bg-primary/10 transition-all group"
+                                    >
+                                        <div className="flex -space-x-1.5 overflow-hidden">
+                                            {currentCluster.slice(0, 3).map((m, i) => (
+                                                <div key={i} className={`h-4 w-4 rounded-full border border-black flex items-center justify-center text-[8px] bg-primary/20`}>
+                                                    {m.content.startsWith('TOOL_RESPONSE:') ? '✓' : '⚙'}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <span>{currentCluster.length} PROTOCOL OPERATIONS</span>
+                                        <span className="text-[9px] opacity-40 font-normal lowercase">{formatTimestamp(timestamp)}</span>
+                                        <span className="material-symbols-outlined text-xs group-hover:translate-y-0.5 transition-transform">{isClusterExpanded ? 'expand_less' : 'expand_more'}</span>
+                                    </button>
 
-                            return (
-                                <div key={msg.id} className="flex flex-col gap-1 border-l-2 border-primary/10 ml-6 pl-4 my-1">
-                                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-tighter font-bold">
-                                        <span className={`material-symbols-outlined text-xs ${isError ? 'text-red-500' : 'text-primary'}`}>
-                                            {isError ? 'error' : 'check_circle'}
-                                        </span>
-                                        <span className={isError ? 'text-red-500/80' : 'text-primary/80'}>
-                                            {toolName} Result
-                                        </span>
-                                        <span className="text-slate-500 font-normal">{formatTimestamp(msg.timestamp)}</span>
-                                    </div>
-                                    <pre className={`text-[10px] p-2 rounded bg-black/40 border ${isError ? 'border-red-500/20 text-red-200/70' : 'border-primary/10 text-primary/60'} overflow-x-auto max-h-40`}>
-                                        {parsedResult}
-                                    </pre>
+                                    {isClusterExpanded && (
+                                        <div className="flex flex-col gap-3 pl-4 border-l-2 border-primary/5 py-1 animate-in fade-in slide-in-from-left-2 duration-300">
+                                            {currentCluster.map((msg) => {
+                                                const isResult = msg.content.startsWith('TOOL_RESPONSE:') || msg.content.startsWith('TOOL_ERROR:');
+                                                if (isResult) {
+                                                    const isError = msg.content.startsWith('TOOL_ERROR:');
+                                                    const prefix = isError ? 'TOOL_ERROR:' : 'TOOL_RESPONSE:';
+                                                    const remaining = msg.content.slice(prefix.length);
+                                                    const colonIdx = remaining.indexOf(':');
+                                                    const toolName = remaining.slice(0, colonIdx);
+                                                    const resultStr = remaining.slice(colonIdx + 1);
+                                                    let parsedResult = resultStr;
+                                                    try {
+                                                        const json = JSON.parse(resultStr);
+                                                        parsedResult = JSON.stringify(json, null, 2);
+                                                    } catch (e) {}
+
+                                                    return (
+                                                        <div key={msg.id} className="flex flex-col gap-1.5">
+                                                            <div className="flex items-center gap-2 text-[9px] uppercase font-bold text-primary/40">
+                                                                <span className="material-symbols-outlined text-[10px]">{isError ? 'error' : 'data_object'}</span>
+                                                                {toolName} OUTPUT
+                                                            </div>
+                                                            <pre className={`text-[9px] p-2 rounded bg-black/40 border ${isError ? 'border-red-500/20 text-red-200/60' : 'border-primary/5 text-primary/50'} overflow-x-auto max-h-40 font-mono`}>
+                                                                {parsedResult}
+                                                            </pre>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <div key={msg.id} className="flex flex-col gap-2">
+                                                        <div className="text-[9px] uppercase font-bold text-primary/40 flex items-center gap-2">
+                                                            <span className="material-symbols-outlined text-[10px]">settings_input_component</span>
+                                                            INITIALIZED CALL
+                                                        </div>
+                                                        <div className="text-[10px] text-white/50 bg-white/5 p-2 rounded border border-white/5">
+                                                            <ReactMarkdown remarkPlugins={MARKDOWN_PLUGINS} components={MARKDOWN_COMPONENTS}>
+                                                                {msg.content}
+                                                            </ReactMarkdown>
+                                                            {msg.toolCalls?.map((call: any, idx: number) => (
+                                                                <div key={idx} className="mt-1 opacity-80">
+                                                                    λ {call.name}({JSON.stringify(call.args)})
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             );
-                        }
+                            currentCluster = [];
+                        };
 
-                        return (
-                            <div key={msg.id} className="flex flex-col gap-1">
-                                <div className="flex gap-3">
-                                    <span className={`shrink-0 mt-1 ${colorClass}`}>{formatTimestamp(msg.timestamp)}</span>
-                                    <div className={`flex-1 overflow-hidden flex flex-col gap-2 ${msg.role === 'user' ? 'text-white/90' : 'text-white/70'}`}>
-                                        <ReactMarkdown
-                                            remarkPlugins={MARKDOWN_PLUGINS}
-                                            components={MARKDOWN_COMPONENTS}
-                                        >
-                                            {msg.content}
-                                        </ReactMarkdown>
+                        messages.forEach((msg, idx) => {
+                            const isToolResult = msg.content.startsWith('TOOL_RESPONSE:') || msg.content.startsWith('TOOL_ERROR:');
+                            const isPureToolCall = (msg.toolCalls?.length || 0) > 0 && (msg.content.trim().length < 50 || msg.content.includes('Executing'));
 
+                            if (isToolResult || isPureToolCall) {
+                                currentCluster.push(msg);
+                            } else {
+                                flushCluster(msg.timestamp);
+                                
+                                let colorClass = 'text-primary/60';
+                                if (msg.role === 'user') colorClass = 'text-secondary/60';
+                                if (msg.role === 'agent' && msg.content.includes('[MAIN VIEWSCREEN]')) colorClass = 'text-emerald-500/60';
 
-                                        {msg.toolCalls && msg.toolCalls.length > 0 && (
-                                            <div className="flex flex-col gap-2 my-1">
-                                                <button 
-                                                    onClick={() => toggleToolExpand(msg.id)}
-                                                    className="flex items-center gap-2 self-start rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter text-primary border border-primary/20 hover:bg-primary/20 transition-all"
-                                                >
-                                                    <span className="material-symbols-outlined text-xs">settings_input_component</span>
-                                                    {msg.toolCalls.length} Tool Operations
-                                                    <span className="material-symbols-outlined text-xs">{isExpanded ? 'expand_less' : 'expand_more'}</span>
-                                                </button>
-                                                
-                                                {isExpanded && (
-                                                    <div className="flex flex-col gap-2 pl-2 border-l border-primary/20 bg-black/20 rounded-r py-2 pr-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                                        {msg.toolCalls.map((call: any, i: number) => (
-                                                            <div key={i} className="text-[10px] font-mono">
-                                                                <div className="text-secondary opacity-80 mb-0.5">λ {call.name}</div>
-                                                                <pre className="bg-primary/5 p-1 rounded text-[9px] text-primary/70 overflow-x-auto border border-primary/5">
-                                                                    {JSON.stringify(call.args, null, 2)}
-                                                                </pre>
+                                renderedElements.push(
+                                    <div key={msg.id} className="flex flex-col gap-1">
+                                        <div className="flex gap-3">
+                                            <span className={`shrink-0 mt-1 ${colorClass}`}>{formatTimestamp(msg.timestamp)}</span>
+                                            <div className={`flex-1 overflow-hidden flex flex-col gap-2 ${msg.role === 'user' ? 'text-white/90' : 'text-white/70'}`}>
+                                                <ReactMarkdown remarkPlugins={MARKDOWN_PLUGINS} components={MARKDOWN_COMPONENTS}>
+                                                    {msg.content}
+                                                </ReactMarkdown>
+
+                                                {msg.toolCalls && msg.toolCalls.length > 0 && !isPureToolCall && (
+                                                    <div className="flex flex-col gap-2 my-1">
+                                                        <button 
+                                                            onClick={() => toggleToolExpand(msg.id)}
+                                                            className="flex items-center gap-2 self-start rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter text-primary border border-primary/20 hover:bg-primary/20 transition-all"
+                                                        >
+                                                            <span className="material-symbols-outlined text-xs">settings_input_component</span>
+                                                            {msg.toolCalls.length} Tool Operations
+                                                            <span className="material-symbols-outlined text-xs">{expandedToolIds.has(msg.id) ? 'expand_less' : 'expand_more'}</span>
+                                                        </button>
+                                                        
+                                                        {expandedToolIds.has(msg.id) && (
+                                                            <div className="flex flex-col gap-2 pl-2 border-l border-primary/20 bg-black/20 rounded-r py-2 pr-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                                                                {msg.toolCalls.map((call: any, i: number) => (
+                                                                    <div key={i} className="text-[10px] font-mono">
+                                                                        <div className="text-secondary opacity-80 mb-0.5">λ {call.name}</div>
+                                                                        <pre className="bg-primary/5 p-1 rounded text-[9px] text-primary/70 overflow-x-auto border border-primary/5">
+                                                                            {JSON.stringify(call.args, null, 2)}
+                                                                        </pre>
+                                                                    </div>
+                                                                ))}
                                                             </div>
-                                                        ))}
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                        );
-                    })
+                                );
+                            }
+
+                            if (idx === messages.length - 1) {
+                                flushCluster(msg.timestamp);
+                            }
+                        });
+
+                        return renderedElements;
+                    })()
                 )}
 
                 {isProcessing && (
