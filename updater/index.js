@@ -78,6 +78,11 @@ app.post('/update', (req, res) => {
         echo "Verifying local file sync..."
         git log -1 --format="%h %s"
         
+        echo "Clearing legacy port allocations if present..."
+        # If the old hardcoded container is running, stop it to free port 5175
+        docker stop aetheros-dashboard || true
+        docker rm aetheros-dashboard || true
+        
         echo "Initiating dashboard rebuild via socket proxy..."
         # We use 'docker compose' as a plugin, ensuring we rebuild ONLY the dashboard
         docker compose build --no-cache aetheros-dashboard
