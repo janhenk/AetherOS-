@@ -1160,6 +1160,15 @@ app.post('/api/cron/jobs/:id/toggle', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/docker/logs', async (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id) throw new Error('Container ID required');
+        const { stdout, stderr } = await execPromise(`docker logs --tail 200 "${id}"`);
+        res.json({ logs: stdout + stderr });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/docker/list', async (req, res) => {
     try {
         const { stdout } = await execPromise('docker ps -a --format "{{json .}}"');

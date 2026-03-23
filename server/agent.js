@@ -16,7 +16,7 @@ export async function executeTool(agentId, call, baseUrl, internalToken) {
         const res = await fetch(`${baseUrl}${path}`, { 
             ...options, 
             headers: { ...headers, ...options.headers },
-            signal: AbortSignal.timeout(300000) // 5 minute timeout for tools
+            signal: AbortSignal.timeout(600000) // 10 minute timeout for tools
         });
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         return res;
@@ -127,7 +127,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                         tools: tools,
                         temperature: settings.temperature || 0.7
                     }
-                }, { timeout: 600000 }); // 10 minute timeout for Gemini
+                }, { timeout: 1200000 }); // 20 minute timeout for Gemini
 
                 agentResponseText = res.text || '';
                 if (res.functionCalls && res.functionCalls.length > 0) {
@@ -167,7 +167,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                         ...(settings.bgApiKey ? { 'Authorization': `Bearer ${settings.bgApiKey}` } : {})
                     },
                     body: JSON.stringify(openaiPayload),
-                    signal: AbortSignal.timeout(600000) // 10 minute timeout
+                    signal: AbortSignal.timeout(1200000) // 20 minute timeout
                 });
 
                 // AUTO-PULL LOGIC FOR OLLAMA
@@ -183,7 +183,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                         const pullRes = await fetch(`${ollamaBase}/api/pull`, {
                             method: 'POST',
                             body: JSON.stringify({ name: modelName, stream: false }),
-                            signal: AbortSignal.timeout(600000) // 10 minute timeout for pulling
+                            signal: AbortSignal.timeout(1200000) // 20 minute timeout for pulling
                         });
 
                         if (pullRes.ok) {
@@ -196,7 +196,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                                     ...(settings.bgApiKey ? { 'Authorization': `Bearer ${settings.bgApiKey}` } : {})
                                 },
                                 body: JSON.stringify(openaiPayload),
-                                signal: AbortSignal.timeout(600000) // 10 minute timeout
+                                signal: AbortSignal.timeout(1200000) // 20 minute timeout
                             });
                         } else {
                             const pullError = await pullRes.json().catch(() => ({}));
