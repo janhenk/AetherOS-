@@ -2,7 +2,6 @@
 services:
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy
-    container_name: aetheros-socket-proxy
     restart: always
     environment:
       - CONTAINERS=1
@@ -22,7 +21,6 @@ services:
 
   aetheros-dashboard:
     build: .
-    container_name: aetheros-dashboard
     restart: always
     ports:
       - "5175:5175"
@@ -41,7 +39,6 @@ services:
 
   aetheros-updater:
     build: ./updater
-    container_name: aetheros-updater
     restart: always
     depends_on:
       - docker-socket-proxy
