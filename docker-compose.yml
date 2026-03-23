@@ -1,3 +1,4 @@
+name: aetheros
 
 services:
   docker-socket-proxy:
