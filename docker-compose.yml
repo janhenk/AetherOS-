@@ -48,8 +48,7 @@ services:
     volumes:
       # Map the full host repository to /app so the updater can manipulate git files natively
       - ./:/app
-    environment:
-      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - aether-net
 
