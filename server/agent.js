@@ -168,7 +168,8 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                         const ollamaBase = settings.bgBaseUrl.replace(/\/v1\/?$/, '');
                         const pullRes = await fetch(`${ollamaBase}/api/pull`, {
                             method: 'POST',
-                            body: JSON.stringify({ name: modelName, stream: false })
+                            body: JSON.stringify({ name: modelName, stream: false }),
+                            signal: AbortSignal.timeout(300000) // 5 minute timeout for pulling
                         });
 
                         if (pullRes.ok) {
