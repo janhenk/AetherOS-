@@ -199,7 +199,10 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
         const fullPrompt = `${cleanText}\n\n[CONTEXT: User reached out via Slack ${isDM ? 'Direct Message' : 'Channel'}. Keep response formatted nicely for Slack Markdown (*bold*, _italic_, \`code\`).]`;
 
         // Run Loop
+        console.log(`[SLACK DIAG] Starting Agent Loop for ${agentId}...`);
+        const startLoop = Date.now();
         const newHistory = await runAgentLoop(agentId, fullPrompt, systemInstruction, history, settings, TOOLS, baseUrl, internalToken);
+        console.log(`[SLACK DIAG] Agent Loop for ${agentId} finished in ${Date.now() - startLoop}ms`);
         
         // Save history
         chatData[sessionId] = newHistory;

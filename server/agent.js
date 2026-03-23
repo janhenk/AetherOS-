@@ -13,13 +13,21 @@ export async function executeTool(agentId, call, baseUrl, internalToken) {
     };
 
     const apiFetch = async (path, options = {}) => {
-        const res = await fetch(`${baseUrl}${path}`, { 
-            ...options, 
-            headers: { ...headers, ...options.headers },
-            signal: AbortSignal.timeout(1800000) // 30 minute timeout for tools
-        });
-        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-        return res;
+        const start = Date.now();
+        console.log(`[AGENT DIAG] Tool ${name} calling ${path}...`);
+        try {
+            const res = await fetch(`${baseUrl}${path}`, { 
+                ...options, 
+                headers: { ...headers, ...options.headers },
+                signal: AbortSignal.timeout(1800000) // 30 minute timeout for tools
+            });
+            console.log(`[AGENT DIAG] Tool ${name} response: ${res.status} (took ${Date.now() - start}ms)`);
+            if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+            return res;
+        } catch (e) {
+            console.error(`[AGENT DIAG] Tool ${name} FETCH FAILED:`, e.message);
+            throw e;
+        }
     };
 
     try {
@@ -119,6 +127,8 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                     role: msg.role === 'agent' ? 'model' : msg.role,
                     parts: [{ text: msg.content }]
                 }));
+                console.log(`[AGENT DIAG] Iteration ${iteration}: Calling LLM (GEMINI)...`);
+                const startLLM = Date.now();
                 const res = await ai.models.generateContent({
                     model: settings.bgModelName || settings.model || 'gemini-2.0-flash',
                     contents: requestHistory,
@@ -128,6 +138,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                         temperature: settings.temperature || 0.7
                     }
                 }, { timeout: 3600000 }); // 1 hour timeout for Gemini
+                console.log(`[AGENT DIAG] GEMINI responded in ${Date.now() - startLLM}ms`);
 
                 agentResponseText = res.text || '';
                 if (res.functionCalls && res.functionCalls.length > 0) {
@@ -160,6 +171,8 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                     tools: openaiTools.length > 0 ? openaiTools : undefined
                 };
 
+                console.log(`[AGENT DIAG] Iteration ${iteration}: Calling LLM (OPENAI/OLLAMA)...`);
+                const startLLM = Date.now();
                 let res = await fetch(`${settings.bgBaseUrl}/chat/completions`, {
                     method: 'POST',
                     headers: {
@@ -169,6 +182,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                     body: JSON.stringify(openaiPayload),
                     signal: AbortSignal.timeout(3600000) // 1 hour timeout
                 });
+                console.log(`[AGENT DIAG] OPENAI/OLLAMA responded with status ${res.status} in ${Date.now() - startLLM}ms`);
 
                 // AUTO-PULL LOGIC FOR OLLAMA
                 if (res.status === 404 && settings.bgBaseUrl?.includes('11434')) {
@@ -189,6 +203,8 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                         if (pullRes.ok) {
                             console.log(`[Ollama] Successfully pulled '${modelName}'. Retrying request...`);
                             // Retry the original request
+                            console.log(`[AGENT DIAG] Ollama Retrying request...`);
+                            const startRetry = Date.now();
                             res = await fetch(`${settings.bgBaseUrl}/chat/completions`, {
                                 method: 'POST',
                                 headers: {
@@ -198,6 +214,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                                 body: JSON.stringify(openaiPayload),
                                 signal: AbortSignal.timeout(3600000) // 1 hour timeout
                             });
+                            console.log(`[AGENT DIAG] Ollama Retry responded with status ${res.status} in ${Date.now() - startRetry}ms`);
                         } else {
                             const pullError = await pullRes.json().catch(() => ({}));
                             const msg = pullError.error || pullRes.statusText;
@@ -242,9 +259,10 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
             currentHistory.push(...functionResponses);
 
         } catch (err) {
+            console.error(`[AGENT DIAG] FATAL ERROR in runAgentLoop:`, err);
             currentHistory.push({
                 role: 'agent',
-                content: `⚠ BACKGROUND AGENT ERROR: ${err.message}`,
+                content: `⚠ BACKGROUND AGENT ERROR: ${err.message} (Iteration: ${iteration}, Provider: ${settings.bgProvider || 'gemini'})`,
                 timestamp: new Date().toISOString()
             });
             break;
