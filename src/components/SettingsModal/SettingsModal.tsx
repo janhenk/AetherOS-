@@ -4,6 +4,7 @@ import { getAllAgents } from '../../agents';
 import { apiFetch } from '../../utils/api';
 import type { GeminiModel, Settings } from '../../types';
 import SlackHelp from './SlackHelp';
+import CronManager from './CronManager';
 
 const DEFAULT_MODELS: { id: GeminiModel; label: string; tag?: string; maxTokens?: number }[] = [
     { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', tag: 'PREVIEW' },
@@ -597,6 +598,8 @@ const SettingsModal = memo(function SettingsModal() {
                             )}
                         </div>
                     </Field>
+
+                    <CronManager />
 
                     <Field 
                         label="SYSTEM FIRMWARE" 

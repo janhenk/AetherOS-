@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
 import { runAgentLoop, AGENTS, TOOLS } from './agent.js';
 import { startSlackApp, stopSlackApp } from './slack.js';
+import { CronManager } from './cron.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -140,6 +141,23 @@ activeTokens.add(INTERNAL_TOKEN);
 
 // Start Slack Integration
 startSlackApp(getSettings(), getSettings, `http://localhost:${port}`, INTERNAL_TOKEN);
+
+const cronManager = new CronManager({
+    runAgentLoop,
+    agents: () => {
+        const settings = getSettings();
+        return AGENTS.map(defaultAgent => {
+            const override = settings.agentOverrides?.[defaultAgent.id] || {};
+            return { ...defaultAgent, ...override };
+        });
+    },
+    tools: TOOLS,
+    getSettings,
+    baseUrl: `http://localhost:${port}`,
+    internalToken: INTERNAL_TOKEN,
+    jobsFile: path.join(DATA_DIR, 'cron_jobs.json')
+});
+cronManager.init();
 
 const CHAT_HISTORY_FILE = CHAT_FILE;
 const PENDING_TASKS_FILE = path.join(DATA_DIR, 'pending_tasks.json');
@@ -1094,6 +1112,50 @@ app.post('/api/system/host-update', async (req, res) => {
             } catch (e) {
                 res.status(503).json({ error: 'System updater service unreachable. Cannot check for deltas.' });
             }
+        }
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Cron Management API ---
+app.get('/api/cron/jobs', async (req, res) => {
+    try {
+        res.json(cronManager.loadJobs());
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/cron/jobs', async (req, res) => {
+    try {
+        const job = req.body;
+        if (!job.id) job.id = crypto.randomUUID();
+        
+        const existing = cronManager.loadJobs();
+        const index = existing.findIndex(j => j.id === job.id);
+        if (index !== -1) {
+            cronManager.updateJob(job);
+        } else {
+            cronManager.addJob(job);
+        }
+        res.json({ success: true, job });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/cron/jobs/:id', async (req, res) => {
+    try {
+        cronManager.deleteJob(req.params.id);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/cron/jobs/:id/toggle', async (req, res) => {
+    try {
+        const jobs = cronManager.loadJobs();
+        const job = jobs.find(j => j.id === req.params.id);
+        if (job) {
+            job.enabled = !job.enabled;
+            cronManager.updateJob(job);
+            res.json({ success: true, enabled: job.enabled });
+        } else {
+            res.status(404).json({ error: 'Job not found' });
         }
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
