@@ -31,12 +31,33 @@ const MARKDOWN_COMPONENTS: any = {
     hr: ({ node, ...props }: any) => <hr className="border-primary/20 my-4" {...props} />,
     blockquote: ({ node, children, ...props }: any) => {
         const text = String(children?.[0]?.props?.children || children?.[0] || '');
-        if (text.includes('Executing')) {
-            return (
-                <code className="inline-block bg-primary/10 text-primary/80 border border-primary/20 rounded-full px-3 py-0.5 my-1 text-[10px] font-bold tracking-tight italic" {...props}>
-                    {children}
-                </code>
-            );
+        const executingRegex = /Executing \d+ system tools\.\.\./;
+        const match = text.match(executingRegex);
+
+        if (match) {
+            const executingPart = match[0];
+            const remainingText = text.replace(executingRegex, '').trim();
+            const hasMoreText = remainingText.length > 0 || children.length > 1;
+
+            if (!hasMoreText) {
+                return (
+                    <div className="my-1">
+                        <code className="inline-block bg-primary/10 text-primary/80 border border-primary/20 rounded-full px-3 py-0.5 text-[10px] font-bold tracking-tight italic" {...props}>
+                            {executingPart}
+                        </code>
+                    </div>
+                );
+            } else {
+                return (
+                    <blockquote className="border-l-2 border-primary/50 pl-3 my-2 italic text-white/60 bg-primary/5 py-1 pr-2 rounded-r" {...props}>
+                        <code className="inline-block bg-primary/10 text-primary/80 border border-primary/20 rounded-full px-2 py-0.5 mr-2 text-[9px] font-bold tracking-tight italic not-italic">
+                            {executingPart}
+                        </code>
+                        {remainingText}
+                        {children.slice(1)}
+                    </blockquote>
+                );
+            }
         }
         return <blockquote className="border-l-2 border-primary/50 pl-3 my-2 italic text-white/60 bg-primary/5 py-1 pr-2 rounded-r" {...props}>{children}</blockquote>;
     }
