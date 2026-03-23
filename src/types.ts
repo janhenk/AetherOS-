@@ -108,6 +108,14 @@ export interface StoreApp {
     store: string;
 }
 
+export interface DiskUsage {
+    device: string;
+    mount: string;
+    total: number; // in bytes or KB, backend will decide
+    used: number;
+    percent: number;
+}
+
 export interface StatsHistoryPoint {
     cpu: number;
     ram: number;
@@ -117,7 +125,7 @@ export interface StatsHistoryPoint {
 export interface ServerState {
     cpuLoad: number; // 0-100%
     ramUsed: number; // 0-100%
-    storageUsed: number; // 0-100%
+    storageUsed: number | { aggregatePercent: number; disks: DiskUsage[] }; // 0-100% or detail object
     containers: DockerContainer[];
     hostname?: string;
     osInfo?: string;

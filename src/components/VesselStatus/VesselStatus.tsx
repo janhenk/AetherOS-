@@ -29,13 +29,25 @@ ChartJS.register(
 
 const VesselStatus = memo(function VesselStatus() {
     const { state } = useAppContext();
-    const [activeChart, setActiveChart] = useState<'cpu' | 'ram' | null>(null);
+    const [activeChart, setActiveChart] = useState<'cpu' | 'ram' | 'storage' | null>(null);
     const ss = state.serverState;
 
     // Default to fully available if no state
     const cpuAvail = ss ? 100 - ss.cpuLoad : 100;
-    const storageAvail = ss ? 100 - ss.storageUsed : 100;
     const ramAvail = ss ? 100 - ss.ramUsed : 100;
+    
+    const storageInfo = useMemo(() => {
+        if (!ss || !ss.storageUsed) return { aggregate: 100, disks: [] };
+        if (typeof ss.storageUsed === 'number') {
+            return { aggregate: 100 - ss.storageUsed, disks: [] };
+        }
+        return { 
+            aggregate: 100 - ss.storageUsed.aggregatePercent, 
+            disks: ss.storageUsed.disks 
+        };
+    }, [ss]);
+
+    const storageAvail = storageInfo.aggregate;
 
     const chartData = useMemo(() => {
         if (!activeChart) return null;
@@ -110,7 +122,9 @@ const VesselStatus = memo(function VesselStatus() {
                     <div className="flex items-center gap-3">
                         <div className={`h-3 w-3 rounded-full ${activeChart === 'cpu' ? 'bg-primary' : 'bg-secondary'} animate-pulse`}></div>
                         <h2 className="text-lg font-bold uppercase tracking-widest text-white/90">
-                            {activeChart === 'cpu' ? 'Main Warp Core (CPU)' : 'Structural Shields (RAM)'} Telemetry
+                            {activeChart === 'cpu' ? 'Main Warp Core (CPU)' : 
+                             activeChart === 'ram' ? 'Structural Shields (RAM)' : 
+                             'Hull Integrity (Storage)'} Telemetry
                         </h2>
                     </div>
                     <button 
@@ -121,17 +135,53 @@ const VesselStatus = memo(function VesselStatus() {
                     </button>
                 </div>
 
-                <div className="h-[400px] w-full bg-black/40 rounded-xl p-4 border border-white/5 shadow-inner">
-                    {chartData && (
-                        <Line options={chartOptions} data={chartData} />
+                <div className="h-[400px] w-full bg-black/40 rounded-xl p-4 border border-white/5 shadow-inner overflow-y-auto">
+                    {activeChart === 'storage' ? (
+                        <div className="space-y-6 p-2">
+                            {storageInfo.disks.length > 0 ? (
+                                storageInfo.disks.map((disk, i) => (
+                                    <div key={i} className="space-y-2 animate-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: `${i * 50}ms` }}>
+                                        <div className="flex justify-between items-end">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-primary/60 font-bold uppercase tracking-tighter">{disk.device}</span>
+                                                <span className="text-sm font-bold text-white/90">{disk.mount}</span>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xs font-mono text-primary">{disk.percent}% Used</div>
+                                                <div className="text-[10px] text-white/30 uppercase">
+                                                    {(disk.used / (1024**3)).toFixed(1)}GB / {(disk.total / (1024**3)).toFixed(1)}GB
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden ring-1 ring-white/5">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-1000 ease-out ${disk.percent > 90 ? 'bg-red-500 neon-aura-red' : disk.percent > 70 ? 'bg-orange-500' : 'bg-primary neon-aura-primary'}`}
+                                                style={{ width: `${disk.percent}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-white/30 uppercase tracking-widest text-xs">
+                                    No detailed telemetry available for sub-sectors
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        chartData && <Line options={chartOptions} data={chartData} />
                     )}
                 </div>
 
                 <div className="mt-6 flex justify-between items-center text-[10px] text-white/40 uppercase tracking-widest font-bold">
-                    <div>Telemetry Window: 10m Sliding Buffer (Real-time)</div>
+                    <div>
+                        {activeChart === 'storage' 
+                            ? `Total Secondary Sectors: ${storageInfo.disks.length}` 
+                            : 'Telemetry Window: 10m Sliding Buffer (Real-time)'}
+                    </div>
                     <div className="flex gap-4">
                         <div className="flex items-center gap-1.5">
-                            <div className="h-1.5 w-1.5 rounded-full bg-primary"></div> AVAILABLE
+                            <div className={`h-1.5 w-1.5 rounded-full ${activeChart === 'storage' ? 'bg-primary' : 'bg-primary'}`}></div> 
+                            {activeChart === 'storage' ? 'USED CAPACITY' : 'AVAILABLE'}
                         </div>
                         <div className="flex items-center gap-1.5">
                             <div className="h-1.5 w-1.5 rounded-full bg-white/10"></div> TOTAL CAPACITY
@@ -168,9 +218,12 @@ const VesselStatus = memo(function VesselStatus() {
                 </div>
 
                 {/* Storage Avail */}
-                <div className="space-y-2">
+                <div 
+                    className="space-y-2 cursor-pointer group hover:opacity-80 transition-opacity"
+                    onClick={() => setActiveChart('storage')}
+                >
                     <div className="flex justify-between text-xs">
-                        <span className="text-white/70">Storage Free (Hull)</span>
+                        <span className="text-white/70 group-hover:text-primary transition-colors">Storage Free (Hull)</span>
                         <span className="text-primary font-mono">{storageAvail.toFixed(1)}%</span>
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden ring-1 ring-white/5">

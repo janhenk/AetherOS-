@@ -41,7 +41,7 @@ const AUDIT_LOG_PATH = path.join(DATA_DIR, 'logs', 'subspace_comms.log');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(path.join(DATA_DIR, 'logs'))) fs.mkdirSync(path.join(DATA_DIR, 'logs'), { recursive: true });
 
-let cachedStorage = 50;
+let cachedStorage = { aggregatePercent: 50, disks: [] };
 let previousCpus = os.cpus();
 const IS_WIN = os.platform() === 'win32';
 
@@ -77,23 +77,57 @@ function isPathSafe(targetPath) {
 // --- System Metrics Loop ---
 const updateStorage = async () => {
     try {
+        let disks = [];
+        let totalUsed = 0, totalSize = 0;
+
         if (IS_WIN) {
             const { stdout } = await execPromise('wmic logicaldisk get size,freespace,caption');
-            const lines = stdout.split('\n');
-            let total = 0, free = 0;
+            const lines = stdout.trim().split('\n');
             for (let i = 1; i < lines.length; i++) {
                 const parts = lines[i].trim().split(/\s+/);
-                if (parts.length >= 3 && parts[0] === 'C:') {
-                    free += parseInt(parts[1], 10);
-                    total += parseInt(parts[2], 10);
+                if (parts.length >= 3) {
+                    const caption = parts[0];
+                    const free = parseInt(parts[1], 10);
+                    const size = parseInt(parts[2], 10);
+                    if (!isNaN(size) && size > 0) {
+                        const used = size - free;
+                        const percent = Math.round((used / size) * 100);
+                        disks.push({ device: caption, mount: caption, total: size, used, percent });
+                        totalUsed += used;
+                        totalSize += size;
+                    }
                 }
             }
-            if (total > 0) cachedStorage = ((total - free) / total) * 100;
         } else {
-            const { stdout } = await execPromise("df / | tail -1 | awk '{print $5}' | sed 's/%//'");
-            cachedStorage = parseInt(stdout.trim(), 10);
+            // Get all physical disks starting with /dev/
+            const { stdout } = await execPromise("df -BK | grep '^/dev/' || true");
+            if (stdout.trim()) {
+                const lines = stdout.trim().split('\n');
+                for (const line of lines) {
+                    const parts = line.trim().split(/\s+/);
+                    if (parts.length >= 6) {
+                        const device = parts[0];
+                        // df output: Filesystem, 1K-blocks, Used, Available, Use%, Mounted on
+                        const size = parseInt(parts[1].replace('K', ''), 10) * 1024;
+                        const used = parseInt(parts[2].replace('K', ''), 10) * 1024;
+                        const percent = parseInt(parts[4].replace('%', ''), 10);
+                        const mount = parts[5];
+                        
+                        disks.push({ device, mount, total: size, used, percent });
+                        totalUsed += used;
+                        totalSize += size;
+                    }
+                }
+            }
         }
-    } catch (e) { /* ignore */ }
+
+        if (totalSize > 0) {
+            cachedStorage = {
+                aggregatePercent: Math.round((totalUsed / totalSize) * 100),
+                disks: disks.sort((a, b) => b.total - a.total) // Largest disks first
+            };
+        }
+    } catch (e) { console.error('Storage poll error:', e); }
 };
 updateStorage();
 setInterval(updateStorage, 60000);
