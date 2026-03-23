@@ -93,7 +93,9 @@ app.post('/update', (req, res) => {
         env: { 
           ...process.env, 
           DOCKER_HOST: 'tcp://docker-socket-proxy:2375',
-          COMPOSE_PROJECT_NAME: 'aetheros' // explicitly set project name to avoid mismatches
+          COMPOSE_PROJECT_NAME: 'aetheros', // explicitly set project name to avoid mismatches
+          DOCKER_BUILDKIT: '0',
+          COMPOSE_DOCKER_CLI_BUILD: '0'
         } 
       });
       
