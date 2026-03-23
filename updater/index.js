@@ -92,7 +92,7 @@ app.post('/update', (req, res) => {
       const { stdout, stderr } = await execPromise(cmd, { 
         env: { 
           ...process.env, 
-          COMPOSE_PROJECT_NAME: 'aetheros', // explicitly set project name to avoid mismatches
+          DOCKER_HOST: '', // force local socket to bypass proxy 403
           DOCKER_BUILDKIT: '0',
           COMPOSE_DOCKER_CLI_BUILD: '0'
         } 
