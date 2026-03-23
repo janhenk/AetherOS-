@@ -174,17 +174,32 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                     tools: openaiTools.length > 0 ? openaiTools : undefined
                 };
 
-                console.log(`[AGENT DIAG] Iteration ${iteration}: Calling LLM (OPENAI/OLLAMA)...`);
+                // VALIDATION: Ensure bgBaseUrl is present for OpenAI/Ollama
+                if (!agentSettings.bgBaseUrl) {
+                    throw new Error(`OpenAI/Ollama provider selected but 'Base URL' is not configured in System Settings.`);
+                }
+
+                console.log(`[AGENT DIAG] Iteration ${iteration}: Calling LLM (OPENAI/OLLAMA) @ ${agentSettings.bgBaseUrl}...`);
                 const startLLM = Date.now();
-                let res = await fetch(`${agentSettings.bgBaseUrl}/chat/completions`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(agentSettings.bgApiKey ? { 'Authorization': `Bearer ${agentSettings.bgApiKey}` } : {})
-                    },
-                    body: JSON.stringify(openaiPayload),
-                    signal: AbortSignal.timeout(3600000) // 1 hour timeout
-                });
+                let res;
+                try {
+                    res = await fetch(`${agentSettings.bgBaseUrl}/chat/completions`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(agentSettings.bgApiKey ? { 'Authorization': `Bearer ${agentSettings.bgApiKey}` } : {})
+                        },
+                        body: JSON.stringify(openaiPayload),
+                        signal: AbortSignal.timeout(3600000) // 1 hour timeout
+                    });
+                } catch (fetchErr) {
+                    let msg = fetchErr.message;
+                    if (msg === 'fetch failed' && agentSettings.bgBaseUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+                        msg += " (Hint: If running in Docker, 'localhost' points to the container. Use 'http://host.docker.internal:11434/v1' to reach the host system's Ollama instance)";
+                    }
+                    throw new Error(`Subspace Transmission Failed: ${msg}`);
+                }
+                
                 console.log(`[AGENT DIAG] OPENAI/OLLAMA responded with status ${res.status} in ${Date.now() - startLLM}ms`);
 
                 // AUTO-PULL LOGIC FOR OLLAMA
@@ -195,7 +210,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                     if (errorString.includes('not found')) {
                         console.log(`[Ollama] Model '${modelName}' not found. Attempting to pull...`);
                         
-                        // Derived Ollama API URL (assuming bgBaseUrl is something like http://localhost:11434/v1)
+                        // Derived Ollama API URL
                         const ollamaBase = agentSettings.bgBaseUrl.replace(/\/v1\/?$/, '');
                         const pullRes = await fetch(`${ollamaBase}/api/pull`, {
                             method: 'POST',
@@ -215,7 +230,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                                     ...(agentSettings.bgApiKey ? { 'Authorization': `Bearer ${agentSettings.bgApiKey}` } : {})
                                 },
                                 body: JSON.stringify(openaiPayload),
-                                signal: AbortSignal.timeout(3600000) // 1 hour timeout
+                                signal: AbortSignal.timeout(3600000) 
                             });
                             console.log(`[AGENT DIAG] Ollama Retry responded with status ${res.status} in ${Date.now() - startRetry}ms`);
                         } else {
@@ -226,7 +241,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                     }
                 }
 
-                if (!res.ok) throw new Error(`OpenAI API error ${res.statusText}`);
+                if (!res.ok) throw new Error(`OpenAI API error ${res.status} ${res.statusText}`);
                 const data = await res.json();
                 const choice = data.choices[0].message;
                 

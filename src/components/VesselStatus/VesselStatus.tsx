@@ -37,14 +37,25 @@ const VesselStatus = memo(function VesselStatus() {
     const ramAvail = ss ? 100 - ss.ramUsed : 100;
     
     const storageInfo = useMemo(() => {
-        if (!ss || !ss.storageUsed) return { aggregate: 100, disks: [] };
+        if (!ss || ss.storageUsed === undefined) return { aggregate: 100, disks: [] };
+        
+        // Handle legacy number format (0-100% used)
         if (typeof ss.storageUsed === 'number') {
             return { aggregate: 100 - ss.storageUsed, disks: [] };
         }
-        return { 
-            aggregate: 100 - ss.storageUsed.aggregatePercent, 
-            disks: ss.storageUsed.disks 
-        };
+
+        // Handle new structured object format
+        if (ss.storageUsed && typeof ss.storageUsed === 'object') {
+            const usedPercent = Number(ss.storageUsed.aggregatePercent);
+            const disks = Array.isArray(ss.storageUsed.disks) ? ss.storageUsed.disks : [];
+            
+            return { 
+                aggregate: isNaN(usedPercent) ? 100 : 100 - usedPercent, 
+                disks 
+            };
+        }
+
+        return { aggregate: 100, disks: [] };
     }, [ss]);
 
     const storageAvail = storageInfo.aggregate;
