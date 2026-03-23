@@ -122,10 +122,10 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                             const isClusterExpanded = expandedToolIds.has(clusterId);
                             
                             renderedElements.push(
-                                <div key={clusterId} className="flex flex-col gap-2 my-2 ml-14">
+                                <div key={clusterId} className="flex flex-col gap-2 my-2 ml-4 sm:ml-14">
                                     <button 
                                         onClick={() => toggleToolExpand(clusterId)}
-                                        className="flex items-center gap-3 self-start rounded-full bg-primary/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary/60 border border-primary/10 hover:bg-primary/10 transition-all group"
+                                        className="flex items-center gap-3 self-start rounded-full bg-primary/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary/60 border border-primary/10 hover:bg-primary/10 transition-all group max-w-full"
                                     >
                                         <div className="flex -space-x-1.5 overflow-hidden">
                                             {currentCluster.slice(0, 3).map((m, i) => (
@@ -210,8 +210,8 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
 
                                 renderedElements.push(
                                     <div key={msg.id} className="flex flex-col gap-1">
-                                        <div className="flex gap-3">
-                                            <span className={`shrink-0 mt-1 ${colorClass}`}>{formatTimestamp(msg.timestamp)}</span>
+                                        <div className="flex flex-col sm:flex-row gap-0.5 sm:gap-3">
+                                            <span className={`shrink-0 text-[10px] sm:text-xs sm:mt-1 opacity-40 sm:opacity-60 font-bold sm:font-normal ${colorClass}`}>{formatTimestamp(msg.timestamp)}</span>
                                             <div className={`flex-1 overflow-hidden flex flex-col gap-2 ${msg.role === 'user' ? 'text-white/90' : 'text-white/70'}`}>
                                                 <ReactMarkdown remarkPlugins={MARKDOWN_PLUGINS} components={MARKDOWN_COMPONENTS}>
                                                     {msg.content}
