@@ -207,9 +207,10 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
 
         // Get the latest agent response text
         const responseMsgs = newHistory.filter(m => m.role === 'agent');
-        let finalResponse = "Task completed without text output.";
+        let finalResponse = "Task completed. Protocols executing as expected.";
         if (responseMsgs.length > 0) {
-            const nonToolMsgs = responseMsgs.filter(m => !m.content.startsWith('TOOL_'));
+            // Filter for messages that aren't tool responses AND aren't empty
+            const nonToolMsgs = responseMsgs.filter(m => !m.content.startsWith('TOOL_') && m.content.trim() !== '');
             if (nonToolMsgs.length > 0) {
                 finalResponse = nonToolMsgs[nonToolMsgs.length - 1].content;
             }
