@@ -111,7 +111,8 @@ const updateStorage = async () => {
                         const size = parseInt(parts[1].replace('K', ''), 10) * 1024;
                         const used = parseInt(parts[2].replace('K', ''), 10) * 1024;
                         const percent = parseInt(parts[4].replace('%', ''), 10);
-                        const mount = parts[5];
+                        let mount = parts[5];
+                        if (mount === '/host_root') mount = '/ (Host OS)';
                         
                         disks.push({ device, mount, total: size, used, percent });
                         totalUsed += used;

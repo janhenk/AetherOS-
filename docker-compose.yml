@@ -30,6 +30,7 @@ services:
       - ./data:/app/data
       - ./example-store:/app/example-store
       - ./composed-apps:/app/composed-apps
+      - /:/host_root:ro
     environment:
       - PORT=5175
       - NODE_ENV=production
