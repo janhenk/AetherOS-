@@ -293,6 +293,13 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
 
             currentHistory.push(...functionResponses);
 
+            // In-Memory Guardrail against recursive infinite outputs
+            if (currentHistory.length > 30) {
+                // Keep the first message (usually system/initial prompt via context),
+                // but truncate the middle to preserve the end
+                currentHistory = [currentHistory[0], ...currentHistory.slice(-29)];
+            }
+
         } catch (err) {
             agentError(`[AGENT DIAG] FATAL ERROR in runAgentLoop:`, err);
             currentHistory.push({

@@ -190,11 +190,20 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
         // For channels, continue using thread_ts to keep separate conversation threads.
         const sessionId = isDM ? `slack_${event.channel}` : `slack_${event.channel}_${threadTs}`;
 
+        // Handle Admin/Clear Commands
+        if (['clear', 'reset'].includes(rawText.toLowerCase())) {
+            let chatData = fs.existsSync(CHAT_FILE) ? JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8')) : {};
+            chatData[sessionId] = [];
+            fs.writeFileSync(CHAT_FILE, JSON.stringify(chatData, null, 2));
+            await say({ text: "Amnesia protocol initiated. Conversation context erased.", thread_ts: event.ts });
+            return;
+        }
+
         // Handle Help/List commands
         if (['help', 'list', 'agents', 'hi', 'hello'].includes(rawText.toLowerCase())) {
             const agentList = AGENTS.map(a => `*${a.id}* - ${a.name} (${a.shortName})`).join('\n');
             await say({
-                text: `*AetherOS Slack Integration Help*\n\nTo interact with an AI agent, prefix your message with its ID (e.g., \`nav status\`). In DMs, I remember which agent you last spoke to!\n\n*Available Agents:*\n${agentList}\n\n_System status: Nominal._`,
+                text: `*AetherOS Slack Integration Help*\n\nTo interact with an AI agent, prefix your message with its ID (e.g., \`nav status\`). In DMs, I remember which agent you last spoke to!\n\n*Available Agents:*\n${agentList}\n\n_System status: Nominal._\n_Type \`clear\` to reset our conversation memory._`,
                 thread_ts: event.ts // Use event.ts to reply to the specific message even in DMs
             });
             return;
@@ -246,7 +255,7 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
 
         // Load history 
         let chatData = fs.existsSync(CHAT_FILE) ? JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8')) : {};
-        const history = chatData[sessionId] || [];
+        const history = (chatData[sessionId] || []).slice(-10); // Keep only last 10 messages
 
         const settings = getSettingsFn();
         const agentDef = AGENTS.find(a => a.id === agentId) || AGENTS[1];
