@@ -116,6 +116,63 @@ export async function startSlackApp(settings, getSettingsFn, baseUrl, internalTo
 
 const CHANNEL_AGENTS_FILE = path.join(DATA_DIR, 'channel_agents.json');
 
+function convertMarkdownToSlack(md) {
+    if (!md) return '';
+    let text = md;
+    
+    // 1. Headers: ### Header -> *Header*
+    text = text.replace(/^(#{1,6})\s+(.+)$/gm, '*$2*');
+    
+    // 2. Bold: **text** -> *text*
+    text = text.replace(/\*\*(.*?)\*\*/g, '*$1*');
+    
+    // 3. Strikethrough: ~~text~~ -> ~text~
+    text = text.replace(/~~(.*?)~~/g, '~$1~');
+    
+    // 4. Links: [text](url) -> <url|text>
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<$2|$1>');
+
+    return text;
+}
+
+function createBlocks(markdown) {
+    const slackText = convertMarkdownToSlack(markdown);
+    const chunks = [];
+    const paragraphs = slackText.split('\n\n');
+    let currentChunk = '';
+
+    for (const p of paragraphs) {
+        if ((currentChunk.length + p.length + 2) > 2900) {
+            if (currentChunk) chunks.push(currentChunk.trim());
+            if (p.length > 2900) {
+                let temp = p;
+                while (temp.length > 2900) {
+                    chunks.push(temp.substring(0, 2900));
+                    temp = temp.substring(2900);
+                }
+                currentChunk = temp;
+            } else {
+                currentChunk = p;
+            }
+        } else {
+            currentChunk += (currentChunk ? '\n\n' : '') + p;
+        }
+    }
+    if (currentChunk) chunks.push(currentChunk.trim());
+
+    if (chunks.length === 0) {
+        chunks.push("No response generated.");
+    }
+
+    return chunks.map(c => ({
+        type: 'section',
+        text: {
+            type: 'mrkdwn',
+            text: c
+        }
+    }));
+}
+
 async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, internalToken) {
     try {
         const isDM = event.channel_type === 'im';
@@ -219,15 +276,19 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
             }
         }
 
+        const blocks = createBlocks(finalResponse);
+        const fallbackText = finalResponse.substring(0, 150).replace(/\n/g, ' ') + (finalResponse.length > 150 ? '...' : '');
+
         // Post back
         if (thinkingMsg.ts && thinkingMsg.channel) {
             await client.chat.update({
                 channel: thinkingMsg.channel,
                 ts: thinkingMsg.ts,
-                text: finalResponse
+                text: fallbackText,
+                blocks: blocks
             });
         } else {
-            await say({ text: finalResponse, thread_ts: threadTs });
+            await say({ text: fallbackText, blocks: blocks, thread_ts: threadTs });
         }
 
     } catch (e) {
