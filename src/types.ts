@@ -145,6 +145,7 @@ export interface AppState {
     agentStatus: Record<AgentId, AgentStatus>;
     settings: Settings;
     isSettingsOpen: boolean;
+    isLogViewerOpen: boolean;
     activeTab: 'diagnostics' | 'sensors' | 'network';
     sessionMetrics: SessionMetrics;
     serverState: ServerState | null;
@@ -163,6 +164,7 @@ export type AppAction =
     | { type: 'CLEAR_CONVERSATION'; payload: AgentId }
     | { type: 'UPDATE_SETTINGS'; payload: Partial<Settings> }
     | { type: 'TOGGLE_SETTINGS' }
+    | { type: 'TOGGLE_LOG_VIEWER' }
     | { type: 'SET_TAB'; payload: string }
     | { type: 'UPDATE_METRICS'; payload: Partial<AppState['sessionMetrics']> }
     | { type: 'UPDATE_SERVER_STATE'; payload: any }

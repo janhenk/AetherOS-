@@ -6,6 +6,7 @@ import VesselStatus from './components/VesselStatus/VesselStatus';
 import CommandLogs from './components/CommandLogs/CommandLogs';
 import SectorView from './components/SectorView/SectorView';
 import SettingsModal from './components/SettingsModal/SettingsModal';
+import LogViewerModal from './components/LogViewer/LogViewerModal';
 import { AuthOverlay } from './components/Auth/AuthOverlay';
 import { useState, useEffect } from 'react';
 import { useAppContext } from './context/AppContext';
@@ -40,6 +41,7 @@ function AppLayout() {
       <AppFooter />
 
       <SettingsModal />
+      <LogViewerModal />
     </div>
   );
 }

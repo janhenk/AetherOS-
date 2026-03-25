@@ -1151,6 +1151,37 @@ app.post('/api/system/host-update', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/api/logs/:source', async (req, res) => {
+    try {
+        const source = req.params.source;
+        let logPath = '';
+        if (source === 'updater') {
+            logPath = path.join(DATA_DIR, 'logs', 'updater.log');
+        } else if (source === 'agent') {
+            logPath = path.join(DATA_DIR, 'logs', 'agent.log');
+        } else if (source === 'comms') {
+            logPath = AUDIT_LOG_PATH;
+        } else {
+            return res.status(400).json({ error: 'Invalid log source' });
+        }
+
+        if (!fs.existsSync(logPath)) {
+            return res.json({ logs: '[SYSTEM] Log file not found or currently empty.' });
+        }
+
+        if (os.platform() === 'win32') {
+            const content = fs.readFileSync(logPath, 'utf8');
+            const lines = content.split('\n');
+            res.json({ logs: lines.slice(-200).join('\n') });
+        } else {
+            const { stdout } = await execPromise(`tail -n 200 "${logPath}"`);
+            res.json({ logs: stdout });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- Cron Management API ---
 app.get('/api/cron/jobs', async (req, res) => {
     try {

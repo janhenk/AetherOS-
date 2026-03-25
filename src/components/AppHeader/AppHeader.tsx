@@ -9,7 +9,7 @@ interface AppHeaderProps {
 }
 
 const AppHeader = memo(function AppHeader({ activeAgent, setActiveAgent, onSettingsClick }: AppHeaderProps) {
-    const { state } = useAppContext();
+    const { state, dispatch } = useAppContext();
     const version = state.serverState?.projectVersion || '1.0.4';
 
     return (
@@ -52,6 +52,13 @@ const AppHeader = memo(function AppHeader({ activeAgent, setActiveAgent, onSetti
             </nav>
 
             <div className="flex items-center gap-4">
+                <button 
+                    onClick={() => dispatch({ type: 'TOGGLE_LOG_VIEWER' })}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800/50 text-slate-300 transition-all hover:bg-primary/20 hover:text-primary"
+                    title="System Logs"
+                >
+                    <span className="material-symbols-outlined">terminal</span>
+                </button>
                 <button className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800/50 text-slate-300 transition-all hover:bg-primary/20 hover:text-primary">
                     <span className="material-symbols-outlined">notifications</span>
                 </button>

@@ -21,6 +21,7 @@ const INITIAL_STATE: AppState = {
     agentStatus: { nav: 'online', comms: 'online', logistics: 'standby', security: 'active' },
     settings: DEFAULT_SETTINGS,
     isSettingsOpen: false,
+    isLogViewerOpen: false,
     activeTab: 'diagnostics',
     sessionMetrics: {
         lastLatencyMs: 0,
@@ -108,6 +109,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
         case 'TOGGLE_SETTINGS':
             return { ...state, isSettingsOpen: !state.isSettingsOpen };
+
+        case 'TOGGLE_LOG_VIEWER':
+            return { ...state, isLogViewerOpen: !state.isLogViewerOpen };
 
         case 'SET_TAB':
             return { ...state, activeTab: action.payload as any };
