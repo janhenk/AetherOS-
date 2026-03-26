@@ -12,6 +12,7 @@ import { GoogleGenAI } from '@google/genai';
 import { runAgentLoop, AGENTS, TOOLS } from './agent.js';
 import { startSlackApp, stopSlackApp } from './slack.js';
 import { CronManager } from './cron.js';
+import { Client } from 'ssh2';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -741,6 +742,57 @@ app.post('/api/terminal/exec', async (req, res) => {
             return res.json({ output: 'Error: Command violates Prime Directive. Self-Destruct blocked.', cwd: terminalCwd });
         }
 
+        // Read settings dynamically to check for SSH config
+        const settingsPath = path.join(DATA_DIR, 'settings.json');
+        let settings = {};
+        if (fs.existsSync(settingsPath)) {
+            settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        }
+
+        if (settings.sshHost && settings.sshUsername) {
+            // Run command over SSH tunnel to host
+            const wrappedCommand = `${command} ; echo "--AETHEROS_CWD--" ; pwd`;
+            const sshClient = new Client();
+            
+            sshClient.on('ready', () => {
+                sshClient.exec(`cd "${terminalCwd}" && ${wrappedCommand}`, (err, stream) => {
+                    if (err) {
+                        sshClient.end();
+                        return res.status(500).json({ error: err.message, cwd: terminalCwd });
+                    }
+                    let stdout = '';
+                    let stderr = '';
+                    stream.on('close', (code, signal) => {
+                        sshClient.end();
+                        let finalOutput = stdout;
+                        const parts = stdout.split('--AETHEROS_CWD--');
+                        if (parts.length > 1) {
+                            const cwdPart = parts.pop().trim();
+                            if (cwdPart) terminalCwd = cwdPart; // update state
+                            finalOutput = parts.join('--AETHEROS_CWD--').trim();
+                        }
+                        const output = (finalOutput + '\n' + stderr).trim();
+                        auditLog(agent, 'EXEC_SSH', { command }, true);
+                        if (!res.headersSent) res.json({ output, cwd: terminalCwd });
+                    }).on('data', (data) => {
+                        stdout += data;
+                    }).stderr.on('data', (data) => {
+                        stderr += data;
+                    });
+                });
+            }).on('error', (err) => {
+                if (!res.headersSent) res.status(500).json({ error: `SSH Connection Error: ${err.message}`, cwd: terminalCwd });
+            }).connect({
+                host: settings.sshHost,
+                port: settings.sshPort || 22,
+                username: settings.sshUsername,
+                ...(settings.sshPassword && { password: settings.sshPassword })
+            });
+
+            return; // Exit early, handled async via events
+        }
+        
+        // Fallback: Local container shell execution
         const shell = IS_WIN ? 'cmd.exe' : '/bin/bash';
         
         // Append a command to print the working directory so we can track state changes
@@ -761,17 +813,17 @@ app.post('/api/terminal/exec', async (req, res) => {
             const cwdPart = parts.pop().trim();
             finalOutput = parts.join('--AETHEROS_CWD--').trim();
             
-            // Validate the parsed directory before assigning
+            // Validate the parsed directory before assigning locally
             if (cwdPart && fs.existsSync(cwdPart)) {
                 terminalCwd = cwdPart;
             }
         }
 
         const output = (finalOutput + '\n' + stderr).trim();
-        auditLog(agent, 'EXEC', { command }, true);
-        res.json({ output, cwd: terminalCwd });
+        auditLog(agent, 'EXEC_LOCAL', { command }, true);
+        if (!res.headersSent) res.json({ output, cwd: terminalCwd });
     } catch (err) {
-        res.status(500).json({ error: err.message, cwd: terminalCwd });
+        if (!res.headersSent) res.status(500).json({ error: err.message, cwd: terminalCwd });
     }
 });
 

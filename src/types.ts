@@ -42,6 +42,13 @@ export interface Settings {
     hasSlackBotToken?: boolean;
     slackAppToken?: string;
     hasSlackAppToken?: boolean;
+
+    // Host SSH Terminal Settings
+    sshHost?: string;
+    sshPort?: number;
+    sshUsername?: string;
+    sshPassword?: string;
+    hasSshPassword?: boolean;
 }
 
 export interface SessionMetrics {

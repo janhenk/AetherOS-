@@ -5,6 +5,7 @@ import { useGemini } from '../../hooks/useGemini';
 import type { AgentId } from '../../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import MidiPlayer from './MidiPlayer';
 
 interface Props {
     activeAgent: AgentId;
@@ -61,6 +62,22 @@ const MARKDOWN_COMPONENTS: any = {
         }
         return <blockquote className="border-l-2 border-primary/50 pl-3 my-2 italic text-white/60 bg-primary/5 py-1 pr-2 rounded-r" {...props}>{children}</blockquote>;
     }
+};
+
+const renderWithMidi = (content: string) => {
+    if (!content) return null;
+    const parts = content.split(/(<midi>[\s\S]*?<\/midi>)/gi);
+    return parts.map((part, i) => {
+        if (part.toLowerCase().startsWith('<midi>') && part.toLowerCase().endsWith('</midi>')) {
+            const data = part.slice(6, -7).trim();
+            return <MidiPlayer key={i} data={data} />;
+        }
+        return (
+            <ReactMarkdown key={i} remarkPlugins={MARKDOWN_PLUGINS} components={MARKDOWN_COMPONENTS}>
+                {part}
+            </ReactMarkdown>
+        );
+    });
 };
 
 const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
@@ -207,9 +224,7 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                                                             INITIALIZED CALL
                                                         </div>
                                                         <div className="text-[10px] text-white/50 bg-white/5 p-2 rounded border border-white/5">
-                                                            <ReactMarkdown remarkPlugins={MARKDOWN_PLUGINS} components={MARKDOWN_COMPONENTS}>
-                                                                {msg.content}
-                                                            </ReactMarkdown>
+                                                            {renderWithMidi(msg.content)}
                                                             {msg.toolCalls?.map((call: any, idx: number) => (
                                                                 <div key={idx} className="mt-1 opacity-80">
                                                                     λ {call.name}({JSON.stringify(call.args)})
@@ -250,9 +265,7 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                                         <div className="flex flex-col sm:flex-row gap-0.5 sm:gap-3">
                                             <span className={`shrink-0 text-[10px] sm:text-xs sm:mt-1 opacity-40 sm:opacity-60 font-bold sm:font-normal ${colorClass}`}>{formatTimestamp(msg.timestamp)}</span>
                                             <div className={`flex-1 overflow-hidden flex flex-col gap-2 ${msg.role === 'user' ? 'text-white/90' : 'text-white/70'}`}>
-                                                <ReactMarkdown remarkPlugins={MARKDOWN_PLUGINS} components={MARKDOWN_COMPONENTS}>
-                                                    {msg.content}
-                                                </ReactMarkdown>
+                                                {renderWithMidi(msg.content)}
 
                                                 {msg.toolCalls && msg.toolCalls.length > 0 && !isPureToolCall && (
                                                     <div className="flex flex-col gap-2 my-1">

@@ -55,7 +55,8 @@ const SettingsModal = memo(function SettingsModal() {
                 slackBotToken: settings.hasSlackBotToken ? undefined : settings.slackBotToken,
                 slackAppToken: settings.hasSlackAppToken ? undefined : settings.slackAppToken,
                 apiKey: settings.hasKey ? undefined : settings.apiKey,
-                bgApiKey: settings.hasBgKey ? undefined : settings.bgApiKey
+                bgApiKey: settings.hasBgKey ? undefined : settings.bgApiKey,
+                sshPassword: settings.hasSshPassword ? undefined : settings.sshPassword
             });
         }
     }, [isSettingsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -658,6 +659,41 @@ const SettingsModal = memo(function SettingsModal() {
                     </Field>
 
                     <CronManager />
+
+                    <Field label="HOST SSH TERMINAL" hint="Map the Subspace Terminal connection directly to a remote host instead of the isolated container. Leave empty to use local container shell.">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <input 
+                                type="text" 
+                                placeholder="SSH Host / IP (e.g. 172.17.0.1 or host.docker.internal)" 
+                                value={localSettings.sshHost || ''}
+                                onChange={e => setLocalSettings(s => ({ ...s, sshHost: e.target.value }))}
+                                style={inputStyle} 
+                            />
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <input 
+                                    type="text" 
+                                    placeholder="Username" 
+                                    value={localSettings.sshUsername || ''}
+                                    onChange={e => setLocalSettings(s => ({ ...s, sshUsername: e.target.value }))}
+                                    style={{ ...inputStyle, flex: 2 }} 
+                                />
+                                <input 
+                                    type="text" 
+                                    placeholder="Port (22)" 
+                                    value={localSettings.sshPort || 22}
+                                    onChange={e => setLocalSettings(s => ({ ...s, sshPort: parseInt(e.target.value) || 22 }))}
+                                    style={{ ...inputStyle, flex: 1 }} 
+                                />
+                            </div>
+                            <input 
+                                type="password" 
+                                placeholder="SSH Password" 
+                                value={localSettings.sshPassword === undefined ? (localSettings.hasSshPassword ? '********' : '') : localSettings.sshPassword}
+                                onChange={e => setLocalSettings(s => ({ ...s, sshPassword: e.target.value }))}
+                                style={inputStyle} 
+                            />
+                        </div>
+                    </Field>
 
                     <Field 
                         label="SYSTEM FIRMWARE" 
