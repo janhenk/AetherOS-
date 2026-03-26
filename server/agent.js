@@ -143,10 +143,13 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
         try {
             if (provider === 'gemini') {
                 const ai = new GoogleGenAI({ apiKey: agentSettings.bgApiKey || agentSettings.apiKey });
-                const requestHistory = currentHistory.map(msg => ({
-                    role: msg.role === 'agent' ? 'model' : msg.role,
-                    parts: [{ text: msg.content }]
-                }));
+                const requestHistory = currentHistory.map(msg => {
+                    const isToolResult = msg.content.startsWith('TOOL_RESPONSE:') || msg.content.startsWith('TOOL_ERROR:');
+                    return {
+                        role: isToolResult ? 'user' : (msg.role === 'agent' ? 'model' : msg.role),
+                        parts: [{ text: isToolResult ? `[SYSTEM: Tool Execution Result]\n${msg.content}` : msg.content }]
+                    };
+                });
                 agentLog(`[AGENT DIAG] Iteration ${iteration}: Calling LLM (GEMINI)...`);
                 const startLLM = Date.now();
                 const res = await ai.models.generateContent({
@@ -166,10 +169,13 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                 }
             } else if (provider === 'openai') {
                 // Ollama or standard OpenAI compatible
-                const requestHistory = currentHistory.map(msg => ({
-                    role: msg.role === 'agent' ? 'assistant' : msg.role,
-                    content: msg.content
-                }));
+                const requestHistory = currentHistory.map(msg => {
+                    const isToolResult = msg.content.startsWith('TOOL_RESPONSE:') || msg.content.startsWith('TOOL_ERROR:');
+                    return {
+                        role: isToolResult ? 'user' : (msg.role === 'agent' ? 'assistant' : msg.role),
+                        content: isToolResult ? `[SYSTEM: Tool Execution Result]\n${msg.content}\n\nPlease summarize these findings or continue your analysis.` : msg.content
+                    };
+                });
                 // Insert system prompt
                 requestHistory.unshift({ role: 'system', content: systemInstruction });
 
