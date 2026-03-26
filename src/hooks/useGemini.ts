@@ -56,7 +56,7 @@ export function useGemini() {
                         body: JSON.stringify({
                             messages: currentMessages,
                             agentId,
-                            systemInstruction: agentDef.systemPrompt,
+                            systemInstruction: agentDef.systemPrompt + `\n\n[SYSTEM CAPABILITY: You have a built-in Web Audio MIDI synthesizer. To play music or sounds to the user, output a sequence using the <midi> tag. Format: <midi>NOTE:DURATION</midi>. Examples: <midi>C4:0.5, D4:0.25, R:0.25, E4:1</midi>. 'R' stands for Rest. Duration is in seconds. Do not explain the tag, just output it.]`,
                             tools: [{
                                 functionDeclarations: [
                                     {

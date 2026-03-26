@@ -262,9 +262,15 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
 
                                 renderedElements.push(
                                     <div key={msg.id} className="flex flex-col gap-1">
-                                        <div className="flex flex-col sm:flex-row gap-0.5 sm:gap-3">
-                                            <span className={`shrink-0 text-[10px] sm:text-xs sm:mt-1 opacity-40 sm:opacity-60 font-bold sm:font-normal ${colorClass}`}>{formatTimestamp(msg.timestamp)}</span>
+                                        <div className="flex flex-col sm:flex-row gap-0.5 sm:gap-3 mt-4">
+                                            <span className={`shrink-0 text-[10px] sm:text-xs sm:mt-0 opacity-40 sm:opacity-60 font-bold sm:font-normal ${colorClass}`}>{formatTimestamp(msg.timestamp)}</span>
                                             <div className={`flex-1 overflow-hidden flex flex-col gap-2 ${msg.role === 'user' ? 'text-white/90' : 'text-white/70'}`}>
+                                                <div className="text-[9px] uppercase font-bold tracking-widest opacity-50 mb-[-4px] flex items-center gap-1.5">
+                                                    <span className="material-symbols-outlined text-[10px]">
+                                                        {msg.role === 'user' ? 'person' : agent.icon || 'smart_toy'}
+                                                    </span>
+                                                    {msg.role === 'user' ? 'System Operator' : agent.shortName}
+                                                </div>
                                                 {renderWithMidi(msg.content)}
 
                                                 {msg.toolCalls && msg.toolCalls.length > 0 && !isPureToolCall && (

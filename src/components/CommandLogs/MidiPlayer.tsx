@@ -112,32 +112,29 @@ export default function MidiPlayer({ data }: { data: string }) {
     }, []);
 
     return (
-        <div className="flex flex-col gap-1 inline-block bg-primary/10 border border-primary/20 rounded p-2 my-2 w-full max-w-sm font-mono text-[10px]">
-            <div className="flex justify-between items-center text-primary/80">
-                <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[14px]">
-                        {isPlaying ? 'graphic_eq' : 'music_note'}
-                    </span>
-                    <span className="tracking-widest uppercase font-bold">Midi Sequence Received</span>
-                </div>
-                <button 
-                    onClick={() => playSequence()} 
-                    disabled={isPlaying}
-                    className="hover:text-primary transition-colors disabled:opacity-50 border border-primary/20 rounded-full h-5 w-5 flex items-center justify-center p-0"
-                >
-                    <span className="material-symbols-outlined text-[12px]">play_arrow</span>
-                </button>
-            </div>
+        <div className="group relative inline-flex items-center gap-1.5 bg-primary/10 hover:bg-primary/20 transition-colors border border-primary/20 rounded-full px-2.5 py-0.5 my-1 w-auto font-mono text-[10px] cursor-help">
+            <span className="material-symbols-outlined text-[12px] text-primary/80">
+                {isPlaying ? 'graphic_eq' : 'music_note'}
+            </span>
+            <span className="text-primary/70 font-bold uppercase tracking-widest">{isPlaying ? 'Playing Audio' : 'Audio Embedded'}</span>
             
-            <div className="h-1 bg-black/40 rounded overflow-hidden mt-1">
-                <div 
-                    className="h-full bg-primary transition-all duration-75" 
-                    style={{ width: `${progress}%` }} 
-                />
-            </div>
-            
-            <div className="text-[8px] opacity-40 text-left mt-0.5 truncate uppercase" title={data}>
-                {data}
+            <button 
+                onClick={() => playSequence()} 
+                disabled={isPlaying}
+                className="hover:text-primary transition-colors disabled:opacity-50 ml-1.5 flex items-center justify-center p-0 text-primary/80"
+            >
+                <span className="material-symbols-outlined text-[14px]">play_circle</span>
+            </button>
+
+            {/* Hover details tooltip */}
+            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:flex flex-col gap-1 w-64 bg-black/90 p-2.5 rounded border border-primary/30 shadow-xl z-50 cursor-default pointer-events-none">
+                <div className="text-[9px] text-primary/50 uppercase font-bold tracking-widest mb-1">Sequence Data</div>
+                <div className="text-[10px] text-primary/80 break-words whitespace-normal leading-relaxed">{data}</div>
+                {isPlaying && (
+                    <div className="h-1 bg-black rounded overflow-hidden mt-1.5 border border-primary/20">
+                        <div className="h-full bg-primary transition-all duration-75" style={{ width: `${progress}%` }} />
+                    </div>
+                )}
             </div>
         </div>
     );
