@@ -47,39 +47,57 @@ export default function MidiPlayer({ data }: { data: string }) {
         setProgress(0);
 
         const rawNotes = data.split(',').map(n => n.trim()).filter(Boolean);
-        const duration = 0.25; // seconds per note
+        
+        let currentTimeOffset = 0;
+        const parsedNotes = rawNotes.map(n => {
+            if (n.includes(':')) {
+                const [notePart, durPart] = n.split(':');
+                return { note: notePart.trim(), duration: parseFloat(durPart) || 0.25 };
+            }
+            return { note: n, duration: 0.25 }; // fallback default
+        });
         
         const startTime = audioCtx.currentTime + 0.1; // tiny delay for scheduling
         
-        rawNotes.forEach((note, i) => {
-            const freq = noteToFreq(note);
-            const t = startTime + (i * duration);
+        parsedNotes.forEach((item, i) => {
+            const freq = noteToFreq(item.note);
+            const t = startTime + currentTimeOffset;
+            const dur = item.duration;
             
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             
             osc.type = 'triangle'; // Mario-like chip sound
-            osc.frequency.setValueAtTime(freq, t);
             
-            // Envelope (Attack-Decay)
-            gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.5, t + 0.05);
-            gain.gain.setValueAtTime(0.5, t + duration - 0.05);
-            gain.gain.linearRampToValueAtTime(0, t + duration);
+            const isRest = ['r', 'rest'].includes(String(item.note).toLowerCase());
+            osc.frequency.setValueAtTime(isRest ? 0 : freq, t);
+            
+            if (isRest) {
+                gain.gain.setValueAtTime(0, t);
+            } else {
+                // Envelope (Attack-Decay)
+                const attack = Math.min(0.05, dur * 0.2);
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.5, t + attack);
+                gain.gain.setValueAtTime(0.5, t + Math.max(0, dur - 0.05));
+                gain.gain.linearRampToValueAtTime(0, t + dur);
+            }
             
             osc.connect(gain);
             gain.connect(audioCtx.destination);
             
             osc.start(t);
-            osc.stop(t + duration);
+            osc.stop(t + dur);
             
             // Progress bar sync
             setTimeout(() => {
-                setProgress(((i + 1) / rawNotes.length) * 100);
+                setProgress(((i + 1) / parsedNotes.length) * 100);
             }, (t - audioCtx.currentTime) * 1000);
+
+            currentTimeOffset += dur;
         });
         
-        const totalDurationMs = (startTime - audioCtx.currentTime + (rawNotes.length * duration)) * 1000;
+        const totalDurationMs = (startTime - audioCtx.currentTime + currentTimeOffset) * 1000;
         
         setTimeout(() => {
             setIsPlaying(false);
