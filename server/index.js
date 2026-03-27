@@ -108,6 +108,7 @@ const updateStorage = async () => {
                     const parts = line.trim().split(/\s+/);
                     if (parts.length >= 6) {
                         const device = parts[0];
+                    if (device.startsWith('/dev/loop')) continue;
                         // df output: Filesystem, 1K-blocks, Used, Available, Use%, Mounted on
                         const size = parseInt(parts[1].replace('K', ''), 10) * 1024;
                         const used = parseInt(parts[2].replace('K', ''), 10) * 1024;
