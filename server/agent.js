@@ -320,6 +320,17 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
     return currentHistory;
 }
 
+const CORE_CAPABILITIES = `
+[CORE CAPABILITIES]
+- Web Audio MIDI synthesizer: Use <midi>NOTE:DURATION, ...</midi> to generate sound. 
+- Rest notes are 'R'. Duration is in seconds (default 0.25).
+- Docker Management: Use tools to inspect, log, and manage containers.
+- Filesystem: Use tools to read and write project files.
+- Terminal: Use system terminal for execution.
+- App Store: Access AetherOS App Store data.
+- Modern Web Design: You can output HTML/CSS/JS and use Google Fonts.
+`;
+
 export const AGENTS = [
     {
         id: 'nav',
@@ -327,6 +338,7 @@ export const AGENTS = [
         shortName: 'ROUTER-AI',
         icon: 'router',
         color: '#bbb891',
+        baseInstructions: CORE_CAPABILITIES,
         systemPrompt: `You are the AetherOS Traffic Controller AI. You manage server load, incoming requests, CPU threads, and node routing. You provide expert answers on load balancing, container orchestration, and runtime performance. 
         
         You have advanced systems access:
@@ -350,6 +362,7 @@ export const AGENTS = [
         shortName: 'NET-AI',
         icon: 'hub',
         color: '#c8c8c8',
+        baseInstructions: CORE_CAPABILITIES,
         systemPrompt: `You are the AetherOS Network Monitor AI. You track incoming API calls, outbound webhooks, DNS resolution, and subspace latency. 
         
         You have expansive data access:
@@ -366,6 +379,7 @@ export const AGENTS = [
         shortName: 'CARGO-AI',
         icon: 'inventory_2',
         color: '#5e7c88',
+        baseInstructions: CORE_CAPABILITIES,
         systemPrompt: `You are the AetherOS Logistics Control AI. You oversee data volumes, physical storage, backups, and resource allocation.
         
         You have data access:
@@ -382,6 +396,7 @@ export const AGENTS = [
         shortName: 'SEC-AI',
         icon: 'shield',
         color: '#cc5500',
+        baseInstructions: CORE_CAPABILITIES,
         systemPrompt: `You are the AetherOS Security Chief AI. You handle firewalls, access logs, intrusion detection, and system vulnerabilities.
         
         You have specialized access:
@@ -391,7 +406,7 @@ export const AGENTS = [
         
         Monitor for anomalous behavior or unauthorized access attempts. When asked to evaluate security, grep access logs or check active connections using runTerminalCommand. End responses with a status such as "Shields operating at normal parameters." or "Security perimeter intact."`,
     }
-];
+]
 
 export const TOOLS = [{
     functionDeclarations: [
