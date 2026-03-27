@@ -377,7 +377,10 @@ const SettingsModal = memo(function SettingsModal() {
                                         </div>
                                     </div>
                                     <div>
-                                        <div style={{ fontSize: 9, color: '#444', marginBottom: 4 }}>SYSTEM INSTRUCTIONS</div>
+                                        <div style={{ fontSize: 9, color: '#444', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>PERSONALITY & MISSION PROTOCOLS</span>
+                                            <span style={{ color: 'var(--lcars-sage)', opacity: 0.8 }}>+ CORE CAPABILITIES (MIDI/TOOLS) ACTIVE</span>
+                                        </div>
                                         <textarea 
                                             value={a.systemPrompt} 
                                             onChange={(e) => setLocalSettings(s => ({
