@@ -64,13 +64,14 @@ const MARKDOWN_COMPONENTS: any = {
     }
 };
 
-const renderWithMidi = (content: string) => {
+const renderWithMidi = (content: string, isLastMessage: boolean = false) => {
     if (!content) return null;
     const parts = content.split(/(<midi>[\s\S]*?<\/midi>)/gi);
     return parts.map((part, i) => {
         if (part.toLowerCase().startsWith('<midi>') && part.toLowerCase().endsWith('</midi>')) {
             const data = part.slice(6, -7).trim();
-            return <MidiPlayer key={i} data={data} />;
+            // Only auto-play if it's the last message in the chat
+            return <MidiPlayer key={i} data={data} autoPlay={isLastMessage} />;
         }
         return (
             <ReactMarkdown key={i} remarkPlugins={MARKDOWN_PLUGINS} components={MARKDOWN_COMPONENTS}>
@@ -224,7 +225,7 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                                                             INITIALIZED CALL
                                                         </div>
                                                         <div className="text-[10px] text-white/50 bg-white/5 p-2 rounded border border-white/5">
-                                                            {renderWithMidi(msg.content)}
+                                                            {renderWithMidi(msg.content, msg.id === messages[messages.length - 1]?.id)}
                                                             {msg.toolCalls?.map((call: any, idx: number) => (
                                                                 <div key={idx} className="mt-1 opacity-80">
                                                                     λ {call.name}({JSON.stringify(call.args)})
@@ -271,7 +272,7 @@ const CommandLogs = memo(function CommandLogs({ activeAgent }: Props) {
                                                     </span>
                                                     {msg.role === 'user' ? 'System Operator' : agent.shortName}
                                                 </div>
-                                                {renderWithMidi(msg.content)}
+                                                {renderWithMidi(msg.content, msg.id === messages[messages.length - 1]?.id)}
 
                                                 {msg.toolCalls && msg.toolCalls.length > 0 && !isPureToolCall && (
                                                     <div className="flex flex-col gap-2 my-1">

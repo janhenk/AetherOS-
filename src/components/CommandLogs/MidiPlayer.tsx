@@ -27,7 +27,7 @@ const noteToFreq = (note: string | number) => {
     return 440 * Math.pow(2, (midi - 69) / 12);
 };
 
-export default function MidiPlayer({ data }: { data: string }) {
+export default function MidiPlayer({ data, autoPlay = true }: { data: string; autoPlay?: boolean }) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
 
@@ -105,9 +105,11 @@ export default function MidiPlayer({ data }: { data: string }) {
         }, totalDurationMs);
     };
 
-    // Auto-play on mount exactly when the <midi> tag is closed
+    // Auto-play on mount ONLY if the autoPlay prop is true
     useEffect(() => {
-        playSequence().catch(console.error);
+        if (autoPlay) {
+            playSequence().catch(console.error);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
