@@ -1308,6 +1308,32 @@ app.get('/api/docker/stats', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/api/docker/networks', async (req, res) => {
+    try {
+        const { stdout } = await execPromise('docker network ls --format "{{json .}}"');
+        const networks = stdout.trim().split('\n').filter(Boolean).map(line => {
+            try { return JSON.parse(line); } catch(e) { return null; }
+        }).filter(Boolean);
+
+        const detailed = await Promise.all(networks.map(async (net) => {
+            try {
+                const { stdout: inspectOut } = await execPromise(`docker network inspect "${net.ID}" --format "{{json .}}"`);
+                const info = JSON.parse(inspectOut);
+                const containers = Object.entries(info.Containers || {}).map(([id, c]) => ({
+                    id: id.substring(0, 12),
+                    name: c.Name,
+                    ipv4: c.IPv4Address
+                }));
+                return { id: net.ID, name: net.Name, driver: net.Driver, scope: net.Scope, containers };
+            } catch(e) {
+                return { id: net.ID, name: net.Name, driver: net.Driver, scope: net.Scope, containers: [] };
+            }
+        }));
+
+        res.json({ networks: detailed });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/tools/scrape', async (req, res) => {
     try {
         const { url } = req.body;

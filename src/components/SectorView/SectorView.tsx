@@ -7,6 +7,8 @@ import AppStoreModal from '../AppStore/AppStoreModal';
 import TerminalModal from '../Terminal/TerminalModal';
 import AdvancedDeploymentModal from '../DockerManager/AdvancedDeploymentModal';
 import { TacticalAlerts } from '../TacticalAlerts/TacticalAlerts';
+import NetworkVisualizerModal from '../NetworkVisualizer/NetworkVisualizerModal';
+import CronManagerModal from '../SettingsModal/CronManagerModal';
 import type { DockerCreateSpec } from '../../types';
 
 function ApprovalPanel() {
@@ -77,6 +79,8 @@ export default function SectorView() {
     const [isAppStoreOpen, setAppStoreOpen] = useState(false);
     const [isTerminalOpen, setTerminalOpen] = useState(false);
     const [isAdvancedModalOpen, setAdvancedModalOpen] = useState(false);
+    const [isNetworkVisualizerOpen, setNetworkVisualizerOpen] = useState(false);
+    const [isCronManagerOpen, setCronManagerOpen] = useState(false);
     const [editingContainerSpec, setEditingContainerSpec] = useState<DockerCreateSpec | undefined>(undefined);
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
@@ -283,6 +287,10 @@ export default function SectorView() {
                         <span className="material-symbols-outlined text-primary text-sm">terminal</span>
                         <span className="text-[10px] font-bold tracking-wider text-slate-200 uppercase">Subspace Terminal</span>
                     </button>
+                    <button onClick={() => setCronManagerOpen(true)} className="flex items-center gap-2 rounded-lg border border-primary/10 bg-primary/5 p-2 transition-all hover:bg-primary/20">
+                        <span className="material-symbols-outlined text-primary text-sm">schedule</span>
+                        <span className="text-[10px] font-bold tracking-wider text-slate-200 uppercase">Protocols</span>
+                    </button>
                     <button className="flex items-center gap-2 rounded-lg border border-secondary/10 bg-secondary/5 p-2 transition-all hover:bg-secondary/20 hover:neon-aura-secondary">
                         <span className="material-symbols-outlined text-secondary text-sm">gpp_bad</span>
                         <span className="text-[10px] font-bold tracking-wider text-slate-200 uppercase">Kill Switch</span>
@@ -297,6 +305,11 @@ export default function SectorView() {
                         <p className="text-[10px] text-white/50 uppercase tracking-widest">{containers.length} provisioned instances</p>
                     </div>
                     <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setNetworkVisualizerOpen(true)}
+                            className="material-symbols-outlined text-emerald-400 text-xl opacity-80 hover:text-white hover:opacity-100 transition-colors"
+                            title="Network Topology"
+                        >hub</button>
                         <button
                             onClick={() => setAppStoreOpen(true)}
                             className="material-symbols-outlined text-primary text-xl opacity-80 hover:text-white hover:opacity-100 transition-colors"
@@ -407,6 +420,14 @@ export default function SectorView() {
                 isOpen={isTerminalOpen}
                 onClose={() => setTerminalOpen(false)}
             />
+
+            {isNetworkVisualizerOpen && (
+                <NetworkVisualizerModal onClose={() => setNetworkVisualizerOpen(false)} />
+            )}
+
+            {isCronManagerOpen && (
+                <CronManagerModal onClose={() => setCronManagerOpen(false)} />
+            )}
         </div>
     );
 };
