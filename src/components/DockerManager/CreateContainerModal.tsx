@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import type { DockerCreateSpec } from '../../types';
+import { downloadCompose } from '../../utils/compose';
+
+const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+
+/** Sorts every mapping list alphabetically so a reconfigure always reads in a stable, predictable order. */
+function sortSpec(spec: DockerCreateSpec): DockerCreateSpec {
+    return {
+        ...spec,
+        ports: [...(spec.ports || [])].sort((a, b) => byName(a.container, b.container)),
+        volumes: [...(spec.volumes || [])].sort((a, b) => byName(a.container, b.container)),
+        env: [...(spec.env || [])].sort((a, b) => byName(a.key, b.key)),
+    };
+}
 
 interface CreateContainerModalProps {
     isOpen: boolean;
@@ -21,7 +34,7 @@ export default function CreateContainerModal({ isOpen, onClose, onSubmit, initia
 
     useEffect(() => {
         if (isOpen && initialData) {
-            setSpec(initialData);
+            setSpec(sortSpec(initialData));
         } else if (!isOpen) {
             // Reset on close
             setSpec({
@@ -197,6 +210,10 @@ export default function CreateContainerModal({ isOpen, onClose, onSubmit, initia
                     </div>
 
                     <div className="flex justify-end gap-4 mt-4 pt-4 border-t border-primary/20">
+                        <button type="button" onClick={() => downloadCompose(spec)} disabled={!spec.image} className="px-5 py-2 mr-auto rounded-lg border border-primary/40 text-primary font-bold uppercase tracking-widest text-xs hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-2" title="Download this configuration as a docker-compose.yml">
+                            <span className="material-symbols-outlined text-sm">download</span>
+                            Export Compose
+                        </button>
                         <button type="button" onClick={onClose} className="px-5 py-2 rounded-lg border border-slate-600 text-slate-300 font-bold uppercase tracking-widest text-xs hover:bg-slate-800 transition-colors">Cancel</button>
                         <button type="submit" disabled={isSubmitting} className="px-5 py-2 rounded-lg bg-primary/20 border border-primary/50 text-white font-bold uppercase tracking-widest text-xs hover:bg-primary transition-colors flex items-center gap-2">
                             {isSubmitting ? <span className="material-symbols-outlined animate-spin text-sm">sync</span> : null}

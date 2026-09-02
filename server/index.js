@@ -1130,12 +1130,18 @@ app.post('/api/docker/inspect', async (req, res) => {
                 container: m.Destination
             })),
             env: (raw.Config.Env || []).map((e) => {
-                const [key, value] = e.split('=');
-                return { key, value };
+                // Split on the FIRST '=' only: values may themselves contain '='
+                // (connection strings, base64 blobs, ...)
+                const sep = e.indexOf('=');
+                return sep === -1
+                    ? { key: e, value: '' }
+                    : { key: e.slice(0, sep), value: e.slice(sep + 1) };
             }),
             resources: {
-                cpus: (raw.HostConfig.NanoCpus / 1e9).toString(),
-                memory: (raw.HostConfig.Memory / (1024 * 1024)).toString() + 'm'
+                // 0 means "unlimited" in docker inspect; keep it blank so a
+                // re-deploy doesn't pass --cpus=0 / -m 0m
+                cpus: raw.HostConfig.NanoCpus ? (raw.HostConfig.NanoCpus / 1e9).toString() : '',
+                memory: raw.HostConfig.Memory ? (raw.HostConfig.Memory / (1024 * 1024)).toString() + 'm' : ''
             }
         };
 
