@@ -1052,7 +1052,7 @@ app.post('/api/docker/registry/login', async (req, res) => {
 
 app.post('/api/docker/create', async (req, res) => {
     try {
-        const { image, name, ports, volumes, env, resources, replaceId } = req.body;
+        const { image, name, ports, volumes, env, resources, networks, networkMode, replaceId } = req.body;
 
         if (replaceId) {
             try {
@@ -1066,15 +1066,49 @@ app.post('/api/docker/create', async (req, res) => {
 
         let cmd = `docker run -d`;
         if (name) cmd += ` --name ${name}`;
-        ports?.forEach(p => cmd += ` -p ${p.host}:${p.container}`);
-        volumes?.forEach(v => cmd += ` -v "${v.host}:${v.container}"`);
-        env?.forEach(e => cmd += ` -e "${e.key}=${e.value}"`);
-        if (resources?.cpus) cmd += ` --cpus="${resources.cpus}"`;
-        if (resources?.memory) cmd += ` -m "${resources.memory}"`;
+
+        const activeNets = Array.isArray(networks) ? networks.filter(Boolean) : [];
+        const primaryNet = networkMode && (networkMode === 'host' || networkMode === 'none')
+            ? networkMode
+            : (activeNets[0] || (networkMode ? networkMode : null));
+
+        if (primaryNet) {
+            cmd += ` --network "${primaryNet}"`;
+        }
+
+        if (primaryNet !== 'host') {
+            ports?.forEach(p => {
+                if (p.host || p.container) cmd += ` -p ${p.host}:${p.container}`;
+            });
+        }
+        volumes?.forEach(v => {
+            if (v.host || v.container) cmd += ` -v "${v.host}:${v.container}"`;
+        });
+        env?.forEach(e => {
+            if (e.key) cmd += ` -e "${e.key}=${e.value || ''}"`;
+        });
+        if (resources?.cpus && parseFloat(resources.cpus) > 0) cmd += ` --cpus="${resources.cpus}"`;
+        if (resources?.memory && parseFloat(resources.memory) > 0) cmd += ` -m "${resources.memory}"`;
         cmd += ` ${image}`;
         
         const { stdout } = await execPromise(cmd);
-        res.json({ success: true, id: stdout.trim() });
+        const newContainerId = stdout.trim();
+
+        // Connect any secondary networks
+        if (primaryNet !== 'host' && primaryNet !== 'none' && activeNets.length > 1) {
+            for (let i = 1; i < activeNets.length; i++) {
+                const netName = activeNets[i];
+                if (netName && netName !== primaryNet) {
+                    try {
+                        await execPromise(`docker network connect "${netName}" "${newContainerId}"`);
+                    } catch (netErr) {
+                        console.warn(`Failed to connect container to network ${netName}:`, netErr.message);
+                    }
+                }
+            }
+        }
+
+        res.json({ success: true, id: newContainerId });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1117,6 +1151,10 @@ app.post('/api/docker/inspect', async (req, res) => {
         const { stdout } = await execPromise(`docker inspect "${id}" --format "{{json .}}"`);
         const raw = JSON.parse(stdout);
         
+        const networksMap = raw.NetworkSettings?.Networks || {};
+        const networks = Object.keys(networksMap);
+        const networkMode = raw.HostConfig?.NetworkMode || (networks.length > 0 ? networks[0] : 'bridge');
+
         // Map back to our internal DockerCreateSpec format
         const spec = {
             image: raw.Config.Image,
@@ -1130,16 +1168,44 @@ app.post('/api/docker/inspect', async (req, res) => {
                 container: m.Destination
             })),
             env: (raw.Config.Env || []).map((e) => {
-                const [key, value] = e.split('=');
-                return { key, value };
+                // Split on the FIRST '=' only: values may themselves contain '='
+                // (connection strings, base64 blobs, ...)
+                const sep = e.indexOf('=');
+                return sep === -1
+                    ? { key: e, value: '' }
+                    : { key: e.slice(0, sep), value: e.slice(sep + 1) };
             }),
             resources: {
-                cpus: (raw.HostConfig.NanoCpus / 1e9).toString(),
-                memory: (raw.HostConfig.Memory / (1024 * 1024)).toString() + 'm'
-            }
+                // 0 means "unlimited" in docker inspect; keep it blank so a
+                // re-deploy doesn't pass --cpus=0 / -m 0m
+                cpus: raw.HostConfig.NanoCpus ? (raw.HostConfig.NanoCpus / 1e9).toString() : '',
+                memory: raw.HostConfig.Memory ? (raw.HostConfig.Memory / (1024 * 1024)).toString() + 'm' : ''
+            },
+            networks,
+            networkMode
         };
 
         res.json(spec);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/docker/network/connect', async (req, res) => {
+    try {
+        const { containerId, networkName } = req.body;
+        if (!containerId || !networkName) throw new Error('Container ID and network name required');
+        await execPromise(`docker network connect "${networkName}" "${containerId}"`);
+        auditLog('SYSTEM', 'DOCKER_NETWORK_CONNECT', { containerId, networkName }, true);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/docker/network/disconnect', async (req, res) => {
+    try {
+        const { containerId, networkName } = req.body;
+        if (!containerId || !networkName) throw new Error('Container ID and network name required');
+        await execPromise(`docker network disconnect "${networkName}" "${containerId}"`);
+        auditLog('SYSTEM', 'DOCKER_NETWORK_DISCONNECT', { containerId, networkName }, true);
+        res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

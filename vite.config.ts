@@ -503,17 +503,54 @@ const apiPlugin = () => {
             memory: c.HostConfig?.Memory ? Math.floor(c.HostConfig.Memory / (1024 * 1024)) + 'm' : ''
           };
 
+          // Parse Networks
+          const networksMap = c.NetworkSettings?.Networks || {};
+          const networks = Object.keys(networksMap);
+          const networkMode = c.HostConfig?.NetworkMode || (networks.length > 0 ? networks[0] : 'bridge');
+
           const spec = {
             image: c.Config?.Image || '',
             name: c.Name ? c.Name.replace(/^\//, '') : '',
             ports,
             volumes,
             env,
-            resources
+            resources,
+            networks,
+            networkMode
           };
 
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(spec));
+        } catch (err: any) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+
+      server.middlewares.use('/api/docker/network/connect', async (req: any, res: any) => {
+        if (req.method !== 'POST') { res.statusCode = 405; return res.end(); }
+        try {
+          const { containerId, networkName } = await getBody(req);
+          if (!containerId || !networkName) throw new Error('Container ID and network name required');
+          await execPromise(`docker network connect "${networkName}" "${containerId}"`);
+          auditLog('SYSTEM', 'DOCKER_NETWORK_CONNECT', { containerId, networkName }, true);
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: true }));
+        } catch (err: any) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+
+      server.middlewares.use('/api/docker/network/disconnect', async (req: any, res: any) => {
+        if (req.method !== 'POST') { res.statusCode = 405; return res.end(); }
+        try {
+          const { containerId, networkName } = await getBody(req);
+          if (!containerId || !networkName) throw new Error('Container ID and network name required');
+          await execPromise(`docker network disconnect "${networkName}" "${containerId}"`);
+          auditLog('SYSTEM', 'DOCKER_NETWORK_DISCONNECT', { containerId, networkName }, true);
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: true }));
         } catch (err: any) {
           res.statusCode = 500;
           res.end(JSON.stringify({ error: err.message }));
@@ -988,6 +1025,33 @@ const apiPlugin = () => {
         } catch (err: any) { res.statusCode = 500; res.end(JSON.stringify({ error: err.message })); }
       });
 
+      server.middlewares.use('/api/docker/networks', async (_req: any, res: any) => {
+        try {
+          const { stdout } = await execPromise('docker network ls --format "{{json .}}"');
+          const networks = stdout.trim().split('\n').filter(Boolean).map(line => {
+            try { return JSON.parse(line); } catch(e) { return null; }
+          }).filter(Boolean);
+
+          const detailed = await Promise.all(networks.map(async (net) => {
+            try {
+              const { stdout: inspectOut } = await execPromise(`docker network inspect "${net.ID}" --format "{{json .}}"`);
+              const info = JSON.parse(inspectOut);
+              const containers = Object.entries(info.Containers || {}).map(([id, c]: [string, any]) => ({
+                id: id.substring(0, 12),
+                name: c.Name,
+                ipv4: c.IPv4Address
+              }));
+              return { id: net.ID, name: net.Name, driver: net.Driver, scope: net.Scope, containers };
+            } catch(e) {
+              return { id: net.ID, name: net.Name, driver: net.Driver, scope: net.Scope, containers: [] };
+            }
+          }));
+
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ networks: detailed }));
+        } catch (err: any) { res.statusCode = 500; res.end(JSON.stringify({ error: err.message })); }
+      });
+
       server.middlewares.use('/api/tools/scrape', async (req: any, res: any) => {
         if (req.method !== 'POST') { res.statusCode = 405; return res.end(); }
         try {
@@ -1040,34 +1104,76 @@ const apiPlugin = () => {
         }
         try {
           const body = await getBody(req);
-          const { image, name, ports, volumes, env, resources } = body;
+          const { image, name, ports, volumes, env, resources, networks, networkMode, replaceId } = body;
           if (!image) throw new Error('Image is required');
+
+          if (replaceId) {
+            try {
+              await execPromise(`docker rm -f ${replaceId}`);
+              auditLog('SYSTEM', 'CONTAINER_REPLACEMENT_CLEANUP', { replaceId }, true);
+            } catch (e: any) {
+              console.warn(`Failed to remove old container ${replaceId}:`, e.message);
+            }
+          }
 
           let cmd = `docker run -d`;
           if (name) cmd += ` --name ${name}`;
 
-          if (ports && Array.isArray(ports)) {
-            ports.forEach((p: any) => cmd += ` -p ${p.host}:${p.container}`);
+          const activeNets = Array.isArray(networks) ? networks.filter(Boolean) : [];
+          const primaryNet = networkMode && (networkMode === 'host' || networkMode === 'none')
+              ? networkMode
+              : (activeNets[0] || (networkMode ? networkMode : null));
+
+          if (primaryNet) {
+              cmd += ` --network "${primaryNet}"`;
+          }
+
+          if (primaryNet !== 'host') {
+            if (ports && Array.isArray(ports)) {
+              ports.forEach((p: any) => {
+                if (p.host || p.container) cmd += ` -p ${p.host}:${p.container}`;
+              });
+            }
           }
 
           if (volumes && Array.isArray(volumes)) {
-            volumes.forEach((v: any) => cmd += ` -v "${v.host}:${v.container}"`);
+            volumes.forEach((v: any) => {
+              if (v.host || v.container) cmd += ` -v "${v.host}:${v.container}"`;
+            });
           }
 
           if (env && Array.isArray(env)) {
-            env.forEach((e: any) => cmd += ` -e "${e.key}=${e.value}"`);
+            env.forEach((e: any) => {
+              if (e.key) cmd += ` -e "${e.key}=${e.value || ''}"`;
+            });
           }
 
           if (resources) {
-            if (resources.cpus) cmd += ` --cpus="${resources.cpus}"`;
-            if (resources.memory) cmd += ` -m "${resources.memory}"`;
+            if (resources.cpus && parseFloat(resources.cpus) > 0) cmd += ` --cpus="${resources.cpus}"`;
+            if (resources.memory && parseFloat(resources.memory) > 0) cmd += ` -m "${resources.memory}"`;
           }
 
           cmd += ` ${image}`;
 
           const { stdout } = await execPromise(cmd);
+          const newContainerId = stdout.trim();
+
+          // Connect secondary networks if any
+          if (primaryNet !== 'host' && primaryNet !== 'none' && activeNets.length > 1) {
+            for (let i = 1; i < activeNets.length; i++) {
+              const netName = activeNets[i];
+              if (netName && netName !== primaryNet) {
+                try {
+                  await execPromise(`docker network connect "${netName}" "${newContainerId}"`);
+                } catch (netErr: any) {
+                  console.warn(`Failed to connect container to network ${netName}:`, netErr.message);
+                }
+              }
+            }
+          }
+
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ success: true, id: stdout.trim() }));
+          res.end(JSON.stringify({ success: true, id: newContainerId }));
         } catch (err: any) {
           res.statusCode = 500;
           res.end(JSON.stringify({ error: err.message }));

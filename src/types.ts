@@ -100,6 +100,8 @@ export interface DockerCreateSpec {
         cpus?: string;
         memory?: string;
     };
+    networks?: string[];
+    networkMode?: string;
 }
 
 export interface StoreApp {
