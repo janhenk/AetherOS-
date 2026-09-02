@@ -82,6 +82,7 @@ export default function SectorView() {
     const [isNetworkVisualizerOpen, setNetworkVisualizerOpen] = useState(false);
     const [isCronManagerOpen, setCronManagerOpen] = useState(false);
     const [editingContainerSpec, setEditingContainerSpec] = useState<DockerCreateSpec | undefined>(undefined);
+    const [createModalTab, setCreateModalTab] = useState<'config' | 'compose'>('config');
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
     useEffect(() => {
@@ -321,7 +322,7 @@ export default function SectorView() {
                             title="Advanced Compose Deployment"
                         >layers</button>
                         <button
-                            onClick={() => { setEditingContainerSpec(undefined); setCreateModalOpen(true); }}
+                            onClick={() => { setEditingContainerSpec(undefined); setCreateModalTab('config'); setCreateModalOpen(true); }}
                             className="material-symbols-outlined text-primary text-xl opacity-80 hover:text-white hover:opacity-100 transition-colors"
                             title="Deploy New Node"
                         >add_circle</button>
@@ -376,6 +377,27 @@ export default function SectorView() {
                                             if (response.ok) {
                                                 const liveSpec = await response.json();
                                                 setEditingContainerSpec(liveSpec);
+                                                setCreateModalTab('compose');
+                                                setCreateModalOpen(true);
+                                            }
+                                        } catch (err) {
+                                            console.error('Failed to inspect container for compose', err);
+                                        } finally {
+                                            setIsProcessing(null);
+                                        }
+                                    }} disabled={isProcessing === container.id} className="material-symbols-outlined text-[14px] text-emerald-400 hover:text-emerald-300 pointer transition-colors" title="View Docker Compose Manifest">description</button>
+                                    <button onClick={async () => {
+                                        setIsProcessing(container.id);
+                                        try {
+                                            const response = await apiFetch('/api/docker/inspect', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ id: container.id })
+                                            });
+                                            if (response.ok) {
+                                                const liveSpec = await response.json();
+                                                setEditingContainerSpec(liveSpec);
+                                                setCreateModalTab('config');
                                                 setCreateModalOpen(true);
                                             }
                                         } catch (err) {
@@ -401,6 +423,7 @@ export default function SectorView() {
                 onClose={() => setCreateModalOpen(false)}
                 onSubmit={handleContainerSubmit}
                 initialData={editingContainerSpec}
+                initialTab={createModalTab}
             />
 
             <AdvancedDeploymentModal

@@ -50,7 +50,33 @@ export function specToCompose(spec: DockerCreateSpec): string {
     const memory = spec.resources?.memory?.trim();
     if (memory && parseFloat(memory) > 0) service.mem_limit = memory;
 
-    return YAML.stringify({ services: { [composeServiceName(spec)]: service } }, { lineWidth: 0 });
+    // Network configuration
+    const activeNetworks = (spec.networks || []).filter(n => Boolean(n?.trim()));
+    const mode = spec.networkMode?.trim().toLowerCase();
+
+    if (mode === 'host' || mode === 'none') {
+        service.network_mode = mode;
+    } else if (activeNetworks.length > 0) {
+        if (activeNetworks.includes('host') || activeNetworks.includes('none')) {
+            service.network_mode = activeNetworks.includes('host') ? 'host' : 'none';
+        } else {
+            service.networks = activeNetworks;
+        }
+    }
+
+    const doc: Record<string, unknown> = {
+        services: {
+            [composeServiceName(spec)]: service
+        }
+    };
+
+    // If custom networks are used (excluding default/bridge), declare them as external networks
+    const customNetworks = activeNetworks.filter(n => n !== 'bridge' && n !== 'default' && n !== 'host' && n !== 'none');
+    if (customNetworks.length > 0 && !service.network_mode) {
+        doc.networks = Object.fromEntries(customNetworks.map(n => [n, { external: true }]));
+    }
+
+    return YAML.stringify(doc, { lineWidth: 0 });
 }
 
 /** Triggers a browser download of the compose file for the given spec. */
