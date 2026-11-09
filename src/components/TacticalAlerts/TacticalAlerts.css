@@ -136,3 +136,59 @@
         transform: translateY(0);
     }
 }
+
+.clear-all-btn {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid rgba(19, 200, 236, 0.35);
+    color: var(--lcars-primary);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.clear-all-btn:hover {
+    background: var(--lcars-primary);
+    color: #000;
+}
+
+/* Long alert queues stay inside the panel instead of pushing the page down. */
+.alerts-list {
+    max-height: 340px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.alerts-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.alerts-list::-webkit-scrollbar-thumb {
+    background: rgba(19, 200, 236, 0.3);
+    border-radius: 3px;
+}
+
+.dismiss-btn {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    line-height: 1;
+}
+
+.execute-btn:disabled {
+    opacity: 0.5;
+    cursor: progress;
+}
+
+.alert-error {
+    margin-top: 6px;
+    font-size: 0.7rem;
+    color: #f87171;
+    line-height: 1.4;
+}

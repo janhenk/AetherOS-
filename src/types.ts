@@ -66,11 +66,15 @@ export interface DockerContainer {
 
 export interface TacticalInsight {
     id: string;
-    type: 'resource' | 'security' | 'network' | 'optimization';
+    /** Stable de-duplication key assigned by the server. */
+    key?: string;
+    type: 'resource' | 'security' | 'network' | 'optimization' | 'system';
     severity: 'low' | 'medium' | 'high';
     message: string;
     suggestion: string;
     containerId?: string;
+    image?: string;
+    imageId?: string;
     timestamp: Date;
 }
 
