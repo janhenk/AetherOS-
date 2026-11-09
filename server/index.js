@@ -32,6 +32,33 @@ if (fs.existsSync(distPath)) {
 
 const activeDeployments = [];
 const tacticalInsights = [];
+// Keys the operator explicitly dismissed. An insight with a dismissed key is only
+// re-raised when its payload changes (e.g. a genuinely newer image digest).
+const dismissedInsightKeys = new Set();
+// key -> image digest that was current when the operator dismissed it.
+const dismissedInsightDigests = new Map();
+
+// Adds an insight unless an equivalent one is already queued or was dismissed.
+// `key` must be stable for "the same situation" (no timestamps / random ids).
+const addInsight = (key, insight) => {
+    if (dismissedInsightKeys.has(key)) return null;
+    const existing = tacticalInsights.find(i => i.key === key);
+    if (existing) {
+        // Refresh the wording/timestamp in place instead of stacking a duplicate.
+        Object.assign(existing, insight, { id: existing.id, key });
+        return existing;
+    }
+    const entry = { ...insight, key, id: insight.id || key };
+    tacticalInsights.push(entry);
+    return entry;
+};
+
+const removeInsight = (id) => {
+    const idx = tacticalInsights.findIndex(i => i.id === id || i.key === id);
+    if (idx === -1) return null;
+    const [removed] = tacticalInsights.splice(idx, 1);
+    return removed;
+};
 const DATA_DIR = path.join(process.cwd(), 'data');
 const STORES_FILE = path.join(DATA_DIR, 'stores.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
@@ -585,6 +612,102 @@ app.get('/api/stats', async (req, res) => {
 });
 
 
+// --- Tactical insight lifecycle ---
+
+app.post('/api/insights/dismiss', (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id) throw new Error('Insight id required');
+        const removed = removeInsight(id);
+        if (removed) {
+            const key = removed.key || removed.id;
+            dismissedInsightKeys.add(key);
+            if (removed.imageId) dismissedInsightDigests.set(key, removed.imageId);
+            auditLog('SYSTEM', 'INSIGHT_DISMISSED', { id: key }, true);
+        }
+        res.json({ success: true, insights: tacticalInsights });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.post('/api/insights/clear', (req, res) => {
+    try {
+        for (const insight of tacticalInsights) {
+            const key = insight.key || insight.id;
+            dismissedInsightKeys.add(key);
+            if (insight.imageId) dismissedInsightDigests.set(key, insight.imageId);
+        }
+        const count = tacticalInsights.length;
+        tacticalInsights.length = 0;
+        auditLog('SYSTEM', 'INSIGHTS_CLEARED', { count }, true);
+        res.json({ success: true, cleared: count, insights: tacticalInsights });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Recreates a container on its current image. Compose-managed containers are
+// brought back up through their own project so their configuration is preserved.
+app.post('/api/docker/redeploy', async (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id) throw new Error('Container ID required');
+
+        const targetId = String(id).replace(/^\//, '');
+        if (targetId === 'aetheros-dashboard') {
+            const msg = `Security Protocol Violation: Redeploy of core module '${targetId}' is blocked to prevent system blackout.`;
+            auditLog('SYSTEM', 'DOCKER_REDEPLOY_BLOCKED', { id: targetId }, false);
+            return res.status(403).json({ error: msg });
+        }
+
+        let stdout = '';
+        try {
+            ({ stdout } = await execPromise(`docker inspect --format "{{json .Config.Labels}}" "${targetId}"`));
+        } catch (e) {
+            throw new Error(`Container '${targetId}' no longer exists on this host.`);
+        }
+        const labels = JSON.parse(stdout.trim() || '{}') || {};
+        const project = labels['com.docker.compose.project'];
+        const service = labels['com.docker.compose.service'];
+        const workingDir = labels['com.docker.compose.project.working_dir'];
+
+        if (!project || !service || !workingDir || !fs.existsSync(workingDir)) {
+            throw new Error(`'${targetId}' is not a Compose-managed container (or its project directory is missing on this host). Recreate it from the Containers view instead.`);
+        }
+
+        const deployId = `redeploy-${targetId}-${Date.now()}`;
+        activeDeployments.push({
+            id: deployId,
+            name: `Redeploy: ${service}`,
+            status: 'Recreating container...'
+        });
+
+        const child = spawn('docker', ['compose', 'up', '-d', '--no-deps', '--force-recreate', service], {
+            cwd: workingDir,
+            detached: true
+        });
+
+        const track = (data) => {
+            const d = activeDeployments.find(d => d.id === deployId);
+            if (d) d.status = data.toString().split('\n').filter(Boolean).pop() || d.status;
+        };
+        child.stdout.on('data', track);
+        child.stderr.on('data', track);
+        child.on('error', (err) => {
+            const d = activeDeployments.find(d => d.id === deployId);
+            if (d) d.status = `FATAL: ${err.message}`;
+        });
+        child.on('close', (code) => {
+            const idx = activeDeployments.findIndex(d => d.id === deployId);
+            if (idx !== -1) activeDeployments.splice(idx, 1);
+            auditLog('SYSTEM', 'DOCKER_REDEPLOY_FINISH', { id: targetId, service, code }, code === 0);
+        });
+
+        auditLog('SYSTEM', 'DOCKER_REDEPLOY', { id: targetId, project, service }, true);
+        res.json({ success: true, deployId, service, project });
+    } catch (err) {
+        auditLog('SYSTEM', 'DOCKER_REDEPLOY_FAILED', { id: req.body?.id, error: err.message }, false);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/docker/logs', async (req, res) => {
     try {
         const { stdout, stderr } = await execPromise(`docker logs --tail 50 "${req.body.id}"`);
@@ -618,21 +741,58 @@ const runBackgroundUpdates = async () => {
 
         // Image Pulling Logic
         try {
-            const { stdout } = await execPromise('docker ps --format "{{.Image}} {{.Names}}"');
-            const lines = stdout.trim().split('\n').filter(Boolean);
-            for (const line of lines) {
-                const [image, name] = line.split(' ');
-                if (image.includes(':latest') || image.includes(':nightly')) {
-                    await execPromise(`docker pull ${image}`);
-                    tacticalInsights.push({
-                        id: `update-${name}-${Date.now()}`,
-                        type: 'system',
-                        severity: 'medium',
-                        message: `Automated Update: Pulled new image for '${name}' (${image}).`,
-                        suggestion: `Redeploy stack to apply the new image layers.`,
-                        timestamp: new Date()
-                    });
+            const { stdout } = await execPromise('docker ps --format "{{.Image}}\t{{.Names}}\t{{.ID}}"');
+            const rows = stdout.trim().split('\n').filter(Boolean).map(line => {
+                const [image, name, id] = line.split('\t');
+                return { image, name, id };
+            }).filter(r => r.image && r.name);
+
+            const targets = rows.filter(r => r.image.includes(':latest') || r.image.includes(':nightly'));
+
+            // Pull each distinct image once, however many containers use it.
+            const uniqueImages = [...new Set(targets.map(r => r.image))];
+            for (const image of uniqueImages) {
+                try { await execPromise(`docker pull ${image}`); } catch (e) { /* registry unreachable */ }
+            }
+
+            for (const { image, name, id } of targets) {
+                const key = `update-${name}-${image}`;
+                let latestId = '';
+                let runningId = '';
+                try {
+                    latestId = (await execPromise(`docker image inspect --format "{{.Id}}" ${image}`)).stdout.trim();
+                    runningId = (await execPromise(`docker inspect --format "{{.Image}}" "${id}"`)).stdout.trim();
+                } catch (e) { continue; }
+
+                if (!latestId || !runningId) continue;
+
+                if (latestId === runningId) {
+                    // Container already runs the newest layers: drop any stale alert and
+                    // allow a future update to raise a fresh one.
+                    removeInsight(key);
+                    dismissedInsightKeys.delete(key);
+                    continue;
                 }
+
+                // A newer digest than the one dismissed earlier re-raises the alert.
+                if (dismissedInsightKeys.has(key)) {
+                    const dismissedAt = dismissedInsightDigests.get(key);
+                    if (dismissedAt && dismissedAt !== latestId) {
+                        dismissedInsightKeys.delete(key);
+                        dismissedInsightDigests.delete(key);
+                    }
+                }
+
+                addInsight(key, {
+                    type: 'system',
+                    severity: 'medium',
+                    message: `Automated Update: Pulled new image for '${name}' (${image}).`,
+                    suggestion: `Redeploy stack to apply the new image layers.`,
+                    containerId: name,
+                    image,
+                    imageId: latestId,
+                    timestamp: new Date()
+                });
             }
         } catch (e) { }
 
