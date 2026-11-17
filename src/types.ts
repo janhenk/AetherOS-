@@ -238,12 +238,15 @@ export interface PendingApproval {
   params: Record<string, unknown>;
 }
 
+export type SettingsTab = 'appearance' | 'ai' | 'integrations' | 'security';
+
 export interface AppState {
   activeAgent: AgentId;
   conversations: Record<AgentId, Message[]>;
   agentStatus: Record<AgentId, AgentStatus>;
   settings: Settings;
   isSettingsOpen: boolean;
+  settingsInitialTab?: SettingsTab;
   isLogViewerOpen: boolean;
   activeTab: 'diagnostics' | 'sensors' | 'network';
   sessionMetrics: SessionMetrics;
@@ -271,6 +274,7 @@ export type AppAction =
   | { type: 'CLEAR_CONVERSATION'; payload: AgentId }
   | { type: 'UPDATE_SETTINGS'; payload: Partial<Settings> }
   | { type: 'TOGGLE_SETTINGS' }
+  | { type: 'OPEN_SETTINGS'; payload?: SettingsTab }
   | { type: 'TOGGLE_LOG_VIEWER' }
   | { type: 'SET_TAB'; payload: AppState['activeTab'] }
   | { type: 'UPDATE_METRICS'; payload: Partial<SessionMetrics> }

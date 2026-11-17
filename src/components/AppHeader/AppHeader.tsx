@@ -33,10 +33,47 @@ const AppHeader = memo(function AppHeader({
   const [notificationBusyId, setNotificationBusyId] = useState<string | null>(null);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [systemUpdateInfo, setSystemUpdateInfo] = useState<{
+    updateAvailable: boolean;
+    behindCount: number;
+  }>({ updateAvailable: false, behindCount: 0 });
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
   const version = state.serverState?.projectVersion || '1.0.0';
   const insights = state.serverState?.insights ?? [];
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkSystemUpdates = async () => {
+      try {
+        const res = await apiFetch('/api/system/check-updates');
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          updateAvailable?: boolean;
+          behindCount?: number;
+        };
+        if (!cancelled) {
+          setSystemUpdateInfo({
+            updateAvailable: Boolean(data.updateAvailable),
+            behindCount: typeof data.behindCount === 'number' ? data.behindCount : 0,
+          });
+        }
+      } catch {
+        // Non-fatal: updater check can fail while offline or during local startup
+      }
+    };
+
+    void checkSystemUpdates();
+    const timer = window.setInterval(() => {
+      void checkSystemUpdates();
+    }, 10 * 60 * 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isNotificationsOpen) return;
@@ -307,6 +344,40 @@ const AppHeader = memo(function AppHeader({
               </div>
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'OPEN_SETTINGS', payload: 'security' })}
+            className="kai-btn kai-btn-ghost kai-btn-icon relative"
+            title={
+              systemUpdateInfo.updateAvailable
+                ? `System update available (${systemUpdateInfo.behindCount || 1} commit(s) behind)`
+                : 'System Updates'
+            }
+            aria-label={
+              systemUpdateInfo.updateAvailable
+                ? `System Updates (${systemUpdateInfo.behindCount || 1} available)`
+                : 'System Updates'
+            }
+          >
+            <span
+              className="material-symbols-outlined text-[20px]"
+              style={systemUpdateInfo.updateAvailable ? { color: 'var(--accent-primary)' } : undefined}
+            >
+              system_update
+            </span>
+            {systemUpdateInfo.updateAvailable && (
+              <span
+                className="kai-mono kai-tabular absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold"
+                style={{
+                  backgroundColor: 'var(--accent-primary)',
+                  color: 'var(--accent-contrast)',
+                }}
+              >
+                {systemUpdateInfo.behindCount > 0 ? systemUpdateInfo.behindCount : '!'}
+              </span>
+            )}
+          </button>
 
           <button
             type="button"

@@ -1,12 +1,10 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppContext } from '../../context/useAppContext';
 import { getAllAgents } from '../../agents';
 import { apiFetch } from '../../utils/api';
 import { ThemeSwitcher } from '../../theme/ThemeSwitcher';
-import type { GeminiModel, Settings } from '../../types';
+import type { GeminiModel, Settings, SettingsTab } from '../../types';
 import SlackHelp from './SlackHelp';
-
-type SettingsTab = 'appearance' | 'ai' | 'integrations' | 'security';
 
 interface ModelOption {
     id: GeminiModel;
@@ -20,6 +18,17 @@ interface UpdateCheckStatus {
     behindCount?: number;
     branch?: string;
     lastCommit?: string;
+    error?: string;
+}
+
+interface SystemUpdateStatusResponse {
+    inProgress?: boolean;
+    phase?: 'idle' | 'fetching' | 'building' | 'restarting' | 'completed' | 'failed';
+    mode?: 'docker' | 'local';
+    error?: string | null;
+    targetCommit?: string | null;
+    finishedAt?: string | null;
+    logs?: string;
 }
 
 const DEFAULT_MODELS: ModelOption[] = [
@@ -43,10 +52,30 @@ function createEditableSettings(source: Settings): Settings {
     };
 }
 
+function formatUpdatePhaseMessage(phase?: string, mode?: string, targetCommit?: string | null): string {
+    switch (phase) {
+        case 'fetching':
+            return 'Fetching upstream repository commits...';
+        case 'building':
+            return mode === 'local'
+                ? 'Installing dependencies and building frontend bundle...'
+                : 'Building updated dashboard container image (app remains online during build)...';
+        case 'restarting':
+            return 'Restarting dashboard service with updated build...';
+        case 'completed':
+            return targetCommit
+                ? `Update complete (${targetCommit}). Reloading dashboard...`
+                : 'Update complete. Reloading dashboard...';
+        default:
+            return 'Processing system update...';
+    }
+}
+
 const SettingsModal = memo(function SettingsModal() {
     const { state } = useAppContext();
     if (!state.isSettingsOpen) return null;
 
+    const initialTab: SettingsTab = state.settingsInitialTab || 'appearance';
     const modalKey = [
         state.settings.hasKey ? 'k1' : 'k0',
         state.settings.hasBgKey ? 'bk1' : 'bk0',
@@ -54,14 +83,21 @@ const SettingsModal = memo(function SettingsModal() {
         state.settings.hasSlackAppToken ? 'sa1' : 'sa0',
         state.settings.hasSshPassword ? 'sp1' : 'sp0',
         state.settings.model,
+        initialTab,
     ].join('-');
 
-    return <SettingsModalContent key={modalKey} initialSettings={state.settings} />;
+    return <SettingsModalContent key={modalKey} initialSettings={state.settings} initialTab={initialTab} />;
 });
 
-function SettingsModalContent({ initialSettings }: { initialSettings: Settings }) {
+function SettingsModalContent({
+    initialSettings,
+    initialTab,
+}: {
+    initialSettings: Settings;
+    initialTab: SettingsTab;
+}) {
     const { state, dispatch } = useAppContext();
-    const [activeTab, setActiveTab] = useState<SettingsTab>('appearance');
+    const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
     const [localSettings, setLocalSettings] = useState<Settings>(() =>
         createEditableSettings(initialSettings),
     );
@@ -70,9 +106,17 @@ function SettingsModalContent({ initialSettings }: { initialSettings: Settings }
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     const [isUpdating, setIsUpdating] = useState(false);
-    const [updateProgress, setUpdateProgress] = useState<string | null>(null);
+    const [updateStatus, setUpdateStatus] = useState<{
+        kind: 'info' | 'success' | 'error';
+        text: string;
+        logs?: string;
+        canReload?: boolean;
+    } | null>(null);
+    const [showUpdateLogs, setShowUpdateLogs] = useState(false);
     const [updateInfo, setUpdateInfo] = useState<UpdateCheckStatus | null>(null);
     const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+    const updatePollRef = useRef<number | null>(null);
+    const mountedRef = useRef(true);
 
     const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
     const [isFetchingModels, setIsFetchingModels] = useState(false);
@@ -85,20 +129,30 @@ function SettingsModalContent({ initialSettings }: { initialSettings: Settings }
     const [isChangingPassword, setIsChangingPassword] = useState(false);
     const [passwordResult, setPasswordResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            if (updatePollRef.current !== null) {
+                window.clearTimeout(updatePollRef.current);
+            }
+        };
+    }, []);
+
     const fetchModels = useCallback(async () => {
         setIsFetchingModels(true);
         try {
             const res = await apiFetch('/api/models');
             if (res.ok) {
                 const data = (await res.json()) as { models?: ModelOption[] };
-                if (data.models && data.models.length > 0) {
+                if (data.models && data.models.length > 0 && mountedRef.current) {
                     setAvailableModels(data.models);
                 }
             }
         } catch (err: unknown) {
             console.error('Failed to fetch models:', err);
         } finally {
-            setIsFetchingModels(false);
+            if (mountedRef.current) setIsFetchingModels(false);
         }
     }, []);
 
@@ -106,26 +160,162 @@ function SettingsModalContent({ initialSettings }: { initialSettings: Settings }
         setIsCheckingUpdates(true);
         try {
             const res = await apiFetch('/api/system/check-updates');
+            const data = (await res.json().catch(() => ({}))) as UpdateCheckStatus;
+            if (!mountedRef.current) return;
             if (res.ok) {
-                const data = (await res.json()) as UpdateCheckStatus;
                 setUpdateInfo({
                     updateAvailable: Boolean(data.updateAvailable),
                     behindCount: data.behindCount,
                     branch: data.branch,
                     lastCommit: data.lastCommit,
                 });
+            } else {
+                setUpdateInfo({
+                    updateAvailable: false,
+                    error: data.error || `Unable to check updates (${res.status})`,
+                });
             }
         } catch (err: unknown) {
             console.error('Failed to check for updates:', err);
+            if (mountedRef.current) {
+                setUpdateInfo({
+                    updateAvailable: false,
+                    error: err instanceof Error ? err.message : 'Unable to check updates',
+                });
+            }
         } finally {
-            setIsCheckingUpdates(false);
+            if (mountedRef.current) setIsCheckingUpdates(false);
         }
     }, []);
+
+    const pollUpdateProgress = useCallback(
+        function schedulePoll(sawDisconnect: boolean, attempt: number, baselineFinishedAt: string | null) {
+            if (!mountedRef.current) return;
+            if (attempt >= 150) {
+                setIsUpdating(false);
+                setUpdateStatus((prev) => ({
+                    kind: 'error',
+                    text: 'Update check timed out after 5 minutes. Check System Logs → updater for details.',
+                    logs: prev?.logs,
+                }));
+                return;
+            }
+
+            const delayMs = attempt === 0 ? 1200 : sawDisconnect ? 2500 : 2000;
+            updatePollRef.current = window.setTimeout(async () => {
+                if (!mountedRef.current) return;
+                try {
+                    const statusRes = await apiFetch('/api/system/update-status');
+                    if (!statusRes.ok) {
+                        if (statusRes.status >= 500) {
+                            setUpdateStatus((prev) => ({
+                                kind: 'info',
+                                text: 'Rebuilding & restarting dashboard service — waiting for server to come back online...',
+                                logs: prev?.logs,
+                            }));
+                            schedulePoll(true, attempt + 1, baselineFinishedAt);
+                            return;
+                        }
+                        throw new Error(`Status check failed (${statusRes.status})`);
+                    }
+
+                    const statusData = (await statusRes.json()) as SystemUpdateStatusResponse;
+                    if (!mountedRef.current) return;
+
+                    if (sawDisconnect && !statusData.inProgress) {
+                        setIsUpdating(false);
+                        setUpdateStatus({
+                            kind: 'success',
+                            text: 'Dashboard restarted on the updated image! Reloading...',
+                            logs: statusData.logs,
+                            canReload: true,
+                        });
+                        updatePollRef.current = window.setTimeout(() => {
+                            window.location.reload();
+                        }, 1200);
+                        return;
+                    }
+
+                    if (statusData.inProgress) {
+                        setUpdateStatus({
+                            kind: 'info',
+                            text: formatUpdatePhaseMessage(statusData.phase, statusData.mode, statusData.targetCommit),
+                            logs: statusData.logs,
+                        });
+                        schedulePoll(sawDisconnect, attempt + 1, baselineFinishedAt);
+                        return;
+                    }
+
+                    if (statusData.phase === 'failed' || statusData.error) {
+                        setIsUpdating(false);
+                        setShowUpdateLogs(true);
+                        setUpdateStatus({
+                            kind: 'error',
+                            text: `Update failed: ${statusData.error || 'See updater logs below.'}`,
+                            logs: statusData.logs,
+                        });
+                        return;
+                    }
+
+                    const finishedNow =
+                        statusData.phase === 'completed' &&
+                        (!baselineFinishedAt || statusData.finishedAt !== baselineFinishedAt);
+
+                    if (finishedNow || statusData.phase === 'completed') {
+                        setIsUpdating(false);
+                        setUpdateStatus({
+                            kind: 'success',
+                            text: formatUpdatePhaseMessage('completed', statusData.mode, statusData.targetCommit),
+                            logs: statusData.logs,
+                            canReload: true,
+                        });
+                        void checkUpdates();
+                        updatePollRef.current = window.setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                        return;
+                    }
+
+                    schedulePoll(sawDisconnect, attempt + 1, baselineFinishedAt);
+                } catch {
+                    if (!mountedRef.current) return;
+                    setUpdateStatus((prev) => ({
+                        kind: 'info',
+                        text: 'Rebuilding & restarting dashboard service — waiting for server to come back online...',
+                        logs: prev?.logs,
+                    }));
+                    schedulePoll(true, attempt + 1, baselineFinishedAt);
+                }
+            }, delayMs);
+        },
+        [checkUpdates],
+    );
+
+    const syncRunningUpdateState = useCallback(async () => {
+        try {
+            const res = await apiFetch('/api/system/update-status');
+            if (!res.ok || !mountedRef.current) return;
+            const data = (await res.json()) as SystemUpdateStatusResponse;
+            if (!mountedRef.current) return;
+            if (data.inProgress) {
+                setIsUpdating(true);
+                setUpdateStatus({
+                    kind: 'info',
+                    text: formatUpdatePhaseMessage(data.phase, data.mode, data.targetCommit),
+                    logs: data.logs,
+                });
+                pollUpdateProgress(false, 1, data.finishedAt || null);
+            }
+        } catch {
+            // Ignore initial status poll errors
+        }
+    }, [pollUpdateProgress]);
 
     useEffect(() => {
         void fetchModels();
         void checkUpdates();
-    }, [fetchModels, checkUpdates]);
+        void syncRunningUpdateState();
+    }, [fetchModels, checkUpdates, syncRunningUpdateState]);
 
     const handleCancel = useCallback(() => {
         setElevatedConfirmStep(0);
@@ -147,24 +337,47 @@ function SettingsModalContent({ initialSettings }: { initialSettings: Settings }
     }, [handleCancel, showSlackHelp]);
 
     const handleUpdate = useCallback(async () => {
+        if (updatePollRef.current !== null) {
+            window.clearTimeout(updatePollRef.current);
+            updatePollRef.current = null;
+        }
+
         setIsUpdating(true);
-        setUpdateProgress('Fetching upstream changes...');
+        setUpdateStatus({ kind: 'info', text: 'Initiating system update...' });
+
+        let baselineFinishedAt: string | null = null;
+        try {
+            const prevStatusRes = await apiFetch('/api/system/update-status');
+            if (prevStatusRes.ok) {
+                const prevStatus = (await prevStatusRes.json()) as SystemUpdateStatusResponse;
+                baselineFinishedAt = prevStatus.finishedAt || null;
+            }
+        } catch {
+            baselineFinishedAt = null;
+        }
+
         try {
             const res = await apiFetch('/api/system/update', { method: 'POST' });
-            const data = (await res.json()) as { success?: boolean; error?: string; message?: string };
-            if (!res.ok) {
-                throw new Error(data.error || 'System update failed');
+            const data = (await res.json().catch(() => ({}))) as {
+                success?: boolean;
+                error?: string;
+                message?: string;
+                mode?: string;
+            };
+            if (!res.ok || data.error) {
+                throw new Error(data.error || `System update failed (${res.status})`);
             }
-            setUpdateProgress(data.message || 'Update triggered. Reloading dashboard in 5 seconds...');
-            window.setTimeout(() => {
-                window.location.reload();
-            }, 5000);
+            setUpdateStatus({
+                kind: 'info',
+                text: data.message || 'Update pipeline started. Monitoring progress...',
+            });
+            pollUpdateProgress(false, 0, baselineFinishedAt);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'Update failed';
-            setUpdateProgress(`Update failed: ${message}`);
+            setUpdateStatus({ kind: 'error', text: `Update failed: ${message}` });
             setIsUpdating(false);
         }
-    }, []);
+    }, [pollUpdateProgress]);
 
     const handleLogout = useCallback(async () => {
         try {
@@ -1083,35 +1296,41 @@ function SettingsModalContent({ initialSettings }: { initialSettings: Settings }
 
                                     <Field
                                         label="System Updates"
-                                        hint="Check upstream git status and trigger an application rebuild via the updater service."
+                                        hint="Check upstream git status and trigger an application rebuild (via the Docker updater service or local repository build)."
                                     >
                                         <div className="kai-surface-subtle flex flex-col gap-3">
                                             <div className="flex flex-wrap items-center justify-between gap-2">
                                                 <div className="flex flex-wrap items-center gap-2 text-xs">
                                                     {updateInfo ? (
-                                                        <>
-                                                            <span
-                                                                className={`kai-badge ${updateInfo.updateAvailable ? 'kai-badge-warning' : 'kai-badge-success'}`}
-                                                            >
-                                                                {updateInfo.updateAvailable
-                                                                    ? `${updateInfo.behindCount ?? 1} update(s) available`
-                                                                    : 'Up to date'}
+                                                        updateInfo.error ? (
+                                                            <span className="kai-badge kai-badge-warning" title={updateInfo.error}>
+                                                                {updateInfo.error}
                                                             </span>
-                                                            {updateInfo.branch && (
-                                                                <span className="kai-badge kai-mono">
-                                                                    {updateInfo.branch}
-                                                                </span>
-                                                            )}
-                                                            {updateInfo.lastCommit && (
+                                                        ) : (
+                                                            <>
                                                                 <span
-                                                                    className="kai-mono truncate max-w-[16rem]"
-                                                                    style={{ color: 'var(--text-muted)' }}
-                                                                    title={updateInfo.lastCommit}
+                                                                    className={`kai-badge ${updateInfo.updateAvailable ? 'kai-badge-warning' : 'kai-badge-success'}`}
                                                                 >
-                                                                    {updateInfo.lastCommit}
+                                                                    {updateInfo.updateAvailable
+                                                                        ? `${updateInfo.behindCount ?? 1} update(s) available`
+                                                                        : 'Up to date'}
                                                                 </span>
-                                                            )}
-                                                        </>
+                                                                {updateInfo.branch && (
+                                                                    <span className="kai-badge kai-mono">
+                                                                        {updateInfo.branch}
+                                                                    </span>
+                                                                )}
+                                                                {updateInfo.lastCommit && (
+                                                                    <span
+                                                                        className="kai-mono truncate max-w-[16rem]"
+                                                                        style={{ color: 'var(--text-muted)' }}
+                                                                        title={updateInfo.lastCommit}
+                                                                    >
+                                                                        {updateInfo.lastCommit}
+                                                                    </span>
+                                                                )}
+                                                            </>
+                                                        )
                                                     ) : (
                                                         <span style={{ color: 'var(--text-muted)' }}>
                                                             Checking update status...
@@ -1153,8 +1372,54 @@ function SettingsModalContent({ initialSettings }: { initialSettings: Settings }
                                                 </div>
                                             </div>
 
-                                            {updateProgress && (
-                                                <div className="kai-alert kai-alert-info text-xs">{updateProgress}</div>
+                                            {updateStatus && (
+                                                <div
+                                                    className={`kai-alert text-xs flex flex-col gap-2 ${
+                                                        updateStatus.kind === 'error'
+                                                            ? 'kai-alert-error'
+                                                            : updateStatus.kind === 'success'
+                                                                ? 'kai-alert-success'
+                                                                : 'kai-alert-info'
+                                                    }`}
+                                                    role={updateStatus.kind === 'error' ? 'alert' : 'status'}
+                                                >
+                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                        <span>{updateStatus.text}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            {updateStatus.logs && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setShowUpdateLogs((prev) => !prev)}
+                                                                    className="kai-btn kai-btn-ghost kai-btn-xs"
+                                                                >
+                                                                    {showUpdateLogs ? 'Hide logs' : 'View logs'}
+                                                                </button>
+                                                            )}
+                                                            {updateStatus.canReload && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => window.location.reload()}
+                                                                    className="kai-btn kai-btn-primary kai-btn-xs"
+                                                                >
+                                                                    Reload Dashboard
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {showUpdateLogs && updateStatus.logs && (
+                                                        <pre
+                                                            className="kai-mono text-[11px] p-2.5 rounded overflow-x-auto max-h-48 m-0 whitespace-pre-wrap"
+                                                            style={{
+                                                                backgroundColor: 'var(--bg-primary)',
+                                                                border: '1px solid var(--border-subtle)',
+                                                                color: 'var(--text-secondary)',
+                                                            }}
+                                                        >
+                                                            {updateStatus.logs}
+                                                        </pre>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     </Field>

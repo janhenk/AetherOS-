@@ -2161,6 +2161,161 @@ app.post('/api/docker/network/disconnect', async (req, res) => {
 });
 
 // --- System Updates ---
+const UPDATER_LOG_FILE = path.join(DATA_DIR, 'logs', 'updater.log');
+const localUpdateState = {
+    inProgress: false,
+    phase: 'idle',
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+    targetCommit: null,
+};
+
+function appendUpdaterLog(msg) {
+    const entry = `[${new Date().toISOString()}] ${msg}\n`;
+    try {
+        if (!fs.existsSync(path.dirname(UPDATER_LOG_FILE))) {
+            fs.mkdirSync(path.dirname(UPDATER_LOG_FILE), { recursive: true });
+        }
+        fs.appendFileSync(UPDATER_LOG_FILE, entry);
+    } catch { /* ignore log write errors */ }
+}
+
+function readUpdaterTailLogs(maxLines = 40) {
+    try {
+        if (!fs.existsSync(UPDATER_LOG_FILE)) return '';
+        const lines = fs.readFileSync(UPDATER_LOG_FILE, 'utf8').split(/\r?\n/);
+        return lines.slice(-maxLines).join('\n').trim();
+    } catch {
+        return '';
+    }
+}
+
+async function gitRefExists(repoRoot, refName) {
+    try {
+        await execFileAsync('git', ['show-ref', '--verify', '--quiet', refName], { cwd: repoRoot, timeout: 5000 });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function resolveGitTargetBranch(repoRoot) {
+    let branch = '';
+    try {
+        const { stdout } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoRoot, timeout: 5000 });
+        branch = stdout.trim();
+    } catch {
+        branch = '';
+    }
+
+    if (!branch || branch === 'HEAD') {
+        try {
+            const { stdout } = await execFileAsync('git', ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], {
+                cwd: repoRoot,
+                timeout: 5000,
+            });
+            branch = stdout.trim().replace(/^origin\//, '');
+        } catch {
+            branch = '';
+        }
+    }
+
+    if (!branch || !/^[a-zA-Z0-9._/-]+$/.test(branch)) {
+        branch = (await gitRefExists(repoRoot, 'refs/remotes/origin/main')) ? 'main' : 'master';
+    }
+
+    if (await gitRefExists(repoRoot, `refs/remotes/origin/${branch}`)) {
+        return branch;
+    }
+    if (await gitRefExists(repoRoot, 'refs/remotes/origin/main')) {
+        return 'main';
+    }
+    if (await gitRefExists(repoRoot, 'refs/remotes/origin/master')) {
+        return 'master';
+    }
+    return branch;
+}
+
+async function runLocalRepoUpdate() {
+    if (localUpdateState.inProgress) return;
+
+    const repoRoot = process.cwd();
+    const npmBin = IS_WIN ? 'npm.cmd' : 'npm';
+    localUpdateState.inProgress = true;
+    localUpdateState.phase = 'fetching';
+    localUpdateState.startedAt = new Date().toISOString();
+    localUpdateState.finishedAt = null;
+    localUpdateState.error = null;
+    localUpdateState.targetCommit = null;
+
+    try {
+        appendUpdaterLog('--- LOCAL SYSTEM UPDATE SEQUENCE STARTING ---');
+        if (!fs.existsSync(path.join(repoRoot, '.git'))) {
+            throw new Error('Local .git repository not found.');
+        }
+
+        const { stdout: statusOut } = await execFileAsync('git', ['status', '--porcelain'], { cwd: repoRoot, timeout: 5000 });
+        const dirtyLines = statusOut.split(/\r?\n/).filter(Boolean);
+        const dirtyFiles = dirtyLines.map(line => line.slice(3).trim());
+        const nonLockDirty = dirtyFiles.filter(f => f !== 'package-lock.json');
+        if (nonLockDirty.length > 0) {
+            throw new Error('Cannot auto-update local working tree with uncommitted changes. Commit or stash changes first.');
+        }
+        if (dirtyFiles.includes('package-lock.json')) {
+            appendUpdaterLog('Resetting pre-commit version lockfile delta in package-lock.json...');
+            await execFileAsync('git', ['checkout', '--', 'package-lock.json'], { cwd: repoRoot, timeout: 5000 });
+        }
+
+        appendUpdaterLog('Fetching upstream refs...');
+        await execFileAsync('git', ['fetch', '--all', '--prune'], { cwd: repoRoot, timeout: 60000 });
+
+        const targetBranch = await resolveGitTargetBranch(repoRoot);
+        appendUpdaterLog(`Pulling origin/${targetBranch} (fast-forward)...`);
+        await execFileAsync('git', ['pull', '--ff-only', 'origin', targetBranch], { cwd: repoRoot, timeout: 60000 });
+
+        const { stdout: commitOut } = await execFileAsync('git', ['log', '-1', '--format=%h %s'], {
+            cwd: repoRoot,
+            timeout: 5000,
+        });
+        localUpdateState.targetCommit = commitOut.trim();
+        appendUpdaterLog(`Updated repository to: ${localUpdateState.targetCommit}`);
+
+        localUpdateState.phase = 'building';
+        appendUpdaterLog('Installing dependencies (npm install)...');
+        await execFileAsync(npmBin, ['install', '--no-audit', '--no-fund'], {
+            cwd: repoRoot,
+            shell: IS_WIN,
+            maxBuffer: 20 * 1024 * 1024,
+            timeout: 10 * 60 * 1000,
+        });
+
+        appendUpdaterLog('Building production frontend (npm run build)...');
+        await execFileAsync(npmBin, ['run', 'build'], {
+            cwd: repoRoot,
+            shell: IS_WIN,
+            maxBuffer: 20 * 1024 * 1024,
+            timeout: 10 * 60 * 1000,
+        });
+
+        try {
+            const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
+            if (pkg.version) projectVersion = pkg.version;
+        } catch { /* keep existing projectVersion */ }
+
+        localUpdateState.inProgress = false;
+        localUpdateState.phase = 'completed';
+        localUpdateState.finishedAt = new Date().toISOString();
+        appendUpdaterLog('--- LOCAL SYSTEM UPDATE COMPLETED SUCCESSFULLY ---');
+    } catch (err) {
+        localUpdateState.inProgress = false;
+        localUpdateState.phase = 'failed';
+        localUpdateState.error = err.message || 'Local update failed';
+        localUpdateState.finishedAt = new Date().toISOString();
+        appendUpdaterLog(`!!! LOCAL SYSTEM UPDATE FAILED: ${localUpdateState.error}`);
+    }
+}
+
 async function checkSystemUpdateStatus() {
     try {
         const updaterRes = await fetch('http://aetheros-updater:8080/status', {
@@ -2173,7 +2328,7 @@ async function checkSystemUpdateStatus() {
                 success: true,
                 updateAvailable: Boolean(status.updateAvailable ?? behindCount > 0),
                 behindCount,
-                branch: status.branch || 'unknown',
+                branch: status.branch || status.targetBranch || 'unknown',
                 lastCommit: status.lastCommit || 'unknown',
             };
         }
@@ -2186,15 +2341,17 @@ async function checkSystemUpdateStatus() {
         throw err;
     }
 
-    const { stdout: branchOut } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoRoot, timeout: 5000 });
+    const { stdout: headBranchOut } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoRoot, timeout: 5000 });
     const { stdout: commitOut } = await execFileAsync('git', ['log', '-1', '--format=%h %s'], { cwd: repoRoot, timeout: 5000 });
-    const branch = branchOut.trim() || 'unknown';
+    const headBranch = headBranchOut.trim();
     const lastCommit = commitOut.trim() || 'unknown';
-    const targetBranch = branch === 'HEAD' || branch === 'unknown' ? 'master' : branch;
 
     try {
-        await execFileAsync('git', ['fetch', '--quiet', 'origin'], { cwd: repoRoot, timeout: 8000 });
+        await execFileAsync('git', ['fetch', '--quiet', '--prune', 'origin'], { cwd: repoRoot, timeout: 8000 });
     } catch { /* ignore network failure */ }
+
+    const targetBranch = await resolveGitTargetBranch(repoRoot);
+    const branch = (!headBranch || headBranch === 'HEAD') ? targetBranch : headBranch;
 
     let behindCount = 0;
     if (/^[a-zA-Z0-9._/-]+$/.test(targetBranch)) {
@@ -2219,6 +2376,61 @@ async function checkSystemUpdateStatus() {
     };
 }
 
+async function triggerSystemUpdate() {
+    try {
+        const updaterResponse = await fetch('http://aetheros-updater:8080/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!updaterResponse.ok) {
+            const text = await updaterResponse.text().catch(() => '');
+            const err = new Error(text || `Updater returned HTTP ${updaterResponse.status}`);
+            err.statusCode = 502;
+            throw err;
+        }
+        const data = await updaterResponse.json();
+        return {
+            success: true,
+            mode: 'docker',
+            inProgress: true,
+            message: data.status || 'Update initiated.',
+            ...data,
+        };
+    } catch (updaterErr) {
+        if (updaterErr?.statusCode === 502) throw updaterErr;
+
+        const repoRoot = process.cwd();
+        if (!fs.existsSync(path.join(repoRoot, '.git')) || !(await isGitAvailable())) {
+            const err = new Error('System updater service unreachable and local git repository is unavailable.');
+            err.statusCode = 503;
+            throw err;
+        }
+
+        if (localUpdateState.inProgress) {
+            return {
+                success: true,
+                mode: 'local',
+                inProgress: true,
+                phase: localUpdateState.phase,
+                message: `Local update already in progress (${localUpdateState.phase}).`,
+            };
+        }
+
+        setTimeout(() => {
+            void runLocalRepoUpdate();
+        }, 50);
+
+        return {
+            success: true,
+            mode: 'local',
+            inProgress: true,
+            phase: 'fetching',
+            message: 'Local repository update and build started.',
+        };
+    }
+}
+
 app.get('/api/system/check-updates', async (req, res) => {
     try {
         const status = await checkSystemUpdateStatus();
@@ -2228,47 +2440,56 @@ app.get('/api/system/check-updates', async (req, res) => {
     }
 });
 
+app.get('/api/system/update-status', async (req, res) => {
+    try {
+        const updaterRes = await fetch('http://aetheros-updater:8080/update-status', {
+            signal: AbortSignal.timeout(4000),
+        });
+        if (updaterRes.ok) {
+            const data = await updaterRes.json();
+            return res.json({
+                success: true,
+                mode: 'docker',
+                projectVersion,
+                ...data,
+            });
+        }
+    } catch { /* fallback to local update state */ }
+
+    res.json({
+        success: true,
+        mode: 'local',
+        projectVersion,
+        ...localUpdateState,
+        logs: readUpdaterTailLogs(40),
+    });
+});
+
 app.post('/api/system/update', async (req, res) => {
     try {
-        const updaterResponse = await fetch('http://aetheros-updater:8080/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-        });
-        const data = await updaterResponse.json();
-        res.json({ success: true, message: data.status || 'Update initiated.' });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+        const result = await triggerSystemUpdate();
+        res.json(result);
+    } catch (err) {
+        res.status(err.statusCode || 500).json({ error: err.message });
+    }
 });
 
 app.post('/api/system/host-update', async (req, res) => {
     try {
-        const { action } = req.body;
+        const { action } = req.body || {};
         console.log(`[System] Executing host update action: ${action || 'check'}`);
 
         if (action === 'start') {
-            if (!(await isGitAvailable())) {
-                return res.status(503).json({ error: "System update impossible: 'git' environment required." });
-            }
-            try {
-                const updaterResponse = await fetch('http://aetheros-updater:8080/update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                });
-                const data = await updaterResponse.json();
-                res.json({ success: true, output: data.status || 'Update initiated. System core will rebuild.' });
-            } catch (e) {
-                console.error('Updater service unreachable:', e.message);
-                res.status(503).json({ error: 'System updater service is currently offline or unreachable.' });
-            }
+            const result = await triggerSystemUpdate();
+            res.json({ success: true, output: result.message, ...result });
         } else {
-            try {
-                const status = await checkSystemUpdateStatus();
-                const output = `Connected to branch: ${status.branch}. Last commit: ${status.lastCommit}. Behind upstream by ${status.behindCount} commit(s).`;
-                res.json({ success: true, output, ...status });
-            } catch (e) {
-                res.status(e.statusCode || 503).json({ error: e.message || 'System updater service unreachable.' });
-            }
+            const status = await checkSystemUpdateStatus();
+            const output = `Connected to branch: ${status.branch}. Last commit: ${status.lastCommit}. Behind upstream by ${status.behindCount} commit(s).`;
+            res.json({ success: true, output, ...status });
         }
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) {
+        res.status(err.statusCode || 503).json({ error: err.message || 'System updater service unreachable.' });
+    }
 });
 
 app.get('/api/logs/:source', async (req, res) => {

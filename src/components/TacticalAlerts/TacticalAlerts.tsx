@@ -135,7 +135,7 @@ export const TacticalAlerts: React.FC = () => {
         const isSystemUpdate = insight.type === 'system';
         const endpoint = isSystemUpdate ? '/api/docker/redeploy' : '/api/docker/action';
         const body = isSystemUpdate
-            ? { id: target, pullFirst: false }
+            ? { id: target, pullFirst: true }
             : { id: target, action: 'restart' };
 
         setBusyId(insight.id);

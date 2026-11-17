@@ -374,7 +374,7 @@ export default function SectorView() {
             const res = await apiFetch('/api/docker/auto-update/run', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ containerName: cleanName }),
+                body: JSON.stringify({ containerName: cleanName, forceRecreate: true }),
             });
             const data = (await res.json().catch(() => ({}))) as {
                 results?: Array<{ status?: string; message?: string }>;

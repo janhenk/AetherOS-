@@ -338,13 +338,26 @@ function ContainerAutoUpdateContent({ onClose, initialContainer }: ContainerAuto
             const res = await apiFetch('/api/docker/auto-update/run', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ containerName: name }),
+                body: JSON.stringify({ containerName: name, forceRecreate: true }),
             });
-            const data = (await res.json().catch(() => ({}))) as { error?: string };
+            const data = (await res.json().catch(() => ({}))) as {
+                results?: Array<{ status?: string; message?: string }>;
+                error?: string;
+            };
             if (!res.ok || data.error) {
                 throw new Error(data.error || `Pull & redeploy failed (${res.status})`);
             }
+            const firstResult = data.results?.[0];
+            if (firstResult?.status === 'failed') {
+                throw new Error(firstResult.message || `Pull & redeploy failed for '${name}'.`);
+            }
             await loadAutoUpdateState();
+            setGlobalFeedback({
+                kind: 'success',
+                text: firstResult?.message
+                    ? `${name}: ${firstResult.message}`
+                    : `Pulled latest image and redeployed '${name}'.`,
+            });
         } catch (err: unknown) {
             setRowErrors((prev) => ({
                 ...prev,
