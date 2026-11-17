@@ -1,15 +1,24 @@
 import React, { useMemo, useState } from 'react';
-import { useAppContext } from '../../context/AppContext';
+import { useAppContext } from '../../context/useAppContext';
 import { apiFetch } from '../../utils/api';
 import type { TacticalInsight } from '../../types';
 import './TacticalAlerts.css';
 
+const COLLAPSED_STORAGE_KEY = 'kai-tactical-collapsed';
+
+function readInitialCollapsed(): boolean {
+    try {
+        return localStorage.getItem(COLLAPSED_STORAGE_KEY) === 'true';
+    } catch {
+        return false;
+    }
+}
+
 /**
- * Collapses equivalent alerts into one entry. The server already de-duplicates
- * on its own key, but older queued alerts (and alerts from a server that has
- * not restarted yet) can still repeat, so the view guards too.
+ * Collapses equivalent alerts into one entry so duplicate server-queued items
+ * never stack in the UI.
  */
-const dedupe = (insights: TacticalInsight[]): TacticalInsight[] => {
+function dedupe(insights: TacticalInsight[]): TacticalInsight[] {
     const byKey = new Map<string, TacticalInsight>();
     for (const insight of insights) {
         const key = insight.key || `${insight.type}|${insight.containerId || ''}|${insight.message}`;
@@ -18,69 +27,120 @@ const dedupe = (insights: TacticalInsight[]): TacticalInsight[] => {
             byKey.set(key, insight);
             continue;
         }
-        // Keep the most recent of the duplicates.
         const a = new Date(existing.timestamp).getTime() || 0;
         const b = new Date(insight.timestamp).getTime() || 0;
         if (b >= a) byKey.set(key, insight);
     }
     return [...byKey.values()];
-};
+}
+
+function severityBadgeClass(severity: TacticalInsight['severity']): string {
+    if (severity === 'high') return 'kai-badge kai-badge-danger';
+    if (severity === 'medium') return 'kai-badge kai-badge-warning';
+    return 'kai-badge kai-badge-info';
+}
 
 export const TacticalAlerts: React.FC = () => {
     const { state, dispatch } = useAppContext();
-    const rawInsights = (state.serverState?.insights || []) as TacticalInsight[];
+    const rawInsights = useMemo(
+        () => (state.serverState?.insights ?? []) as TacticalInsight[],
+        [state.serverState?.insights]
+    );
     const insights = useMemo(() => dedupe(rawInsights), [rawInsights]);
 
+    const [isCollapsed, setIsCollapsed] = useState<boolean>(readInitialCollapsed);
     const [busyId, setBusyId] = useState<string | null>(null);
+    const [dismissingId, setDismissingId] = useState<string | null>(null);
+    const [clearingAll, setClearingAll] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [globalError, setGlobalError] = useState<string | null>(null);
 
     const setServerInsights = (next: TacticalInsight[]) => {
+        if (!state.serverState) return;
         dispatch({ type: 'UPDATE_SERVER_STATE', payload: { ...state.serverState, insights: next } });
     };
 
+    const toggleCollapsed = () => {
+        setIsCollapsed((prev) => {
+            const next = !prev;
+            try {
+                localStorage.setItem(COLLAPSED_STORAGE_KEY, String(next));
+            } catch {
+                // Storage access can fail in restricted browser contexts; ignore persistence failure.
+            }
+            return next;
+        });
+    };
+
     const handleDismiss = async (insight: TacticalInsight) => {
-        // Optimistic removal; the next stats poll confirms it.
-        setServerInsights(rawInsights.filter(i => i.id !== insight.id));
+        setDismissingId(insight.id);
+        setErrors((prev) => {
+            if (!prev[insight.id]) return prev;
+            const next = { ...prev };
+            delete next[insight.id];
+            return next;
+        });
+
         try {
-            await apiFetch('/api/insights/dismiss', {
+            const res = await apiFetch('/api/insights/dismiss', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: insight.id })
             });
-        } catch (err) {
-            console.error('Failed to dismiss tactical alert', err);
+            const data = (await res.json().catch(() => ({}))) as { error?: string; insights?: TacticalInsight[] };
+            if (!res.ok || data.error) {
+                throw new Error(data.error || `Dismiss failed (${res.status})`);
+            }
+            const nextInsights = Array.isArray(data.insights)
+                ? data.insights
+                : rawInsights.filter((item) => item.id !== insight.id);
+            setServerInsights(nextInsights);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to dismiss alert.';
+            setErrors((prev) => ({ ...prev, [insight.id]: message }));
+        } finally {
+            setDismissingId(null);
         }
     };
 
     const handleClearAll = async () => {
-        setServerInsights([]);
+        setClearingAll(true);
+        setGlobalError(null);
         try {
-            await apiFetch('/api/insights/clear', {
+            const res = await apiFetch('/api/insights/clear', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({})
             });
-        } catch (err) {
-            console.error('Failed to clear tactical alerts', err);
+            const data = (await res.json().catch(() => ({}))) as { error?: string; insights?: TacticalInsight[] };
+            if (!res.ok || data.error) {
+                throw new Error(data.error || `Clear failed (${res.status})`);
+            }
+            setServerInsights(Array.isArray(data.insights) ? data.insights : []);
+            setErrors({});
+        } catch (err: unknown) {
+            setGlobalError(err instanceof Error ? err.message : 'Failed to clear alerts.');
+        } finally {
+            setClearingAll(false);
         }
     };
 
     const handleExecuteSuggestion = async (insight: TacticalInsight) => {
         const target = insight.containerId;
         if (!target) {
-            setErrors(prev => ({ ...prev, [insight.id]: 'No target container on this directive.' }));
+            setErrors((prev) => ({ ...prev, [insight.id]: 'No target container on this alert.' }));
             return;
         }
 
-        // 'system' alerts come from an image pull and need a recreate, not a restart:
-        // restarting a container reuses the old image layers.
-        const endpoint = insight.type === 'system' ? '/api/docker/redeploy' : '/api/docker/action';
-        const body = insight.type === 'system'
-            ? { id: target }
+        const isSystemUpdate = insight.type === 'system';
+        const endpoint = isSystemUpdate ? '/api/docker/redeploy' : '/api/docker/action';
+        const body = isSystemUpdate
+            ? { id: target, pullFirst: false }
             : { id: target, action: 'restart' };
 
         setBusyId(insight.id);
-        setErrors(prev => {
+        setErrors((prev) => {
+            if (!prev[insight.id]) return prev;
             const next = { ...prev };
             delete next[insight.id];
             return next;
@@ -92,13 +152,15 @@ export const TacticalAlerts: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
+            const data = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok || data.error) {
+                throw new Error(data.error || `Request failed (${res.status})`);
+            }
 
-            // Directive accepted: retire the alert.
             await handleDismiss(insight);
-        } catch (err: any) {
-            setErrors(prev => ({ ...prev, [insight.id]: err?.message || 'Directive failed.' }));
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Action failed.';
+            setErrors((prev) => ({ ...prev, [insight.id]: message }));
         } finally {
             setBusyId(null);
         }
@@ -106,54 +168,121 @@ export const TacticalAlerts: React.FC = () => {
 
     if (insights.length === 0) return null;
 
+    const hasHighSeverity = insights.some((item) => item.severity === 'high');
+
     return (
-        <div className="tactical-alerts-container">
-            <div className="tactical-header">
-                <span className="material-symbols-outlined text-[14px] text-secondary">shield</span>
-                <span>TACTICAL ANALYSIS // PROACTIVE MODE</span>
-                <button className="clear-all-btn" onClick={handleClearAll} title="Dismiss all alerts">
-                    CLEAR ALL ({insights.length})
-                </button>
+        <section className="tactical-alerts-container" aria-label="Tactical analysis alerts">
+            <div className={`tactical-header ${!isCollapsed ? 'is-expanded' : ''}`}>
+                <div className="tactical-header-left">
+                    <span className="material-symbols-outlined tactical-header-icon" aria-hidden="true">
+                        shield
+                    </span>
+                    <span className="tactical-title">TACTICAL ANALYSIS</span>
+                    <span className={`kai-badge kai-tabular ${hasHighSeverity ? 'kai-badge-danger' : 'kai-badge-accent'}`}>
+                        {insights.length}
+                    </span>
+                </div>
+
+                <div className="tactical-header-actions">
+                    <button
+                        type="button"
+                        className="kai-btn kai-btn-ghost kai-btn-xs"
+                        onClick={toggleCollapsed}
+                        aria-expanded={!isCollapsed}
+                        title={isCollapsed ? 'Expand tactical analysis' : 'Collapse tactical analysis'}
+                    >
+                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+                            {isCollapsed ? 'expand_more' : 'expand_less'}
+                        </span>
+                        <span>{isCollapsed ? 'Expand' : 'Collapse'}</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        className="kai-btn kai-btn-secondary kai-btn-xs"
+                        onClick={handleClearAll}
+                        disabled={clearingAll}
+                        title="Dismiss all alerts"
+                    >
+                        {clearingAll ? 'Clearing...' : `Clear all (${insights.length})`}
+                    </button>
+                </div>
             </div>
 
-            <div className="alerts-list">
-                {insights.map((insight) => (
-                    <div key={insight.id} className={`tactical-alert-item severity-${insight.severity}`}>
-                        <div className="alert-badge">
-                            <span className="material-symbols-outlined text-base">
-                                {insight.severity === 'high' ? 'bolt' : 'monitoring'}
-                            </span>
+            {!isCollapsed && (
+                <div className="tactical-alerts-list">
+                    {globalError && (
+                        <div className="kai-alert kai-alert-error text-xs" role="alert">
+                            {globalError}
                         </div>
+                    )}
 
-                        <div className="alert-content">
-                            <div className="alert-message">{insight.message}</div>
-                            <div className="alert-suggestion">{insight.suggestion}</div>
+                    {insights.map((insight) => {
+                        const isBusy = busyId === insight.id;
+                        const isDismissing = dismissingId === insight.id;
+                        const actionLabel = insight.type === 'system' ? 'Redeploy container' : 'Restart container';
+                        const actionIcon = insight.type === 'system' ? 'deployed_code_update' : 'restart_alt';
 
-                            <button
-                                className="execute-btn"
-                                disabled={busyId === insight.id}
-                                onClick={() => handleExecuteSuggestion(insight)}
-                            >
-                                <span className="material-symbols-outlined text-[12px] mr-1">bolt</span>
-                                {busyId === insight.id ? 'EXECUTING...' : 'EXECUTE DIRECTIVE'}
-                            </button>
+                        return (
+                            <div key={insight.id} className={`tactical-alert-item severity-${insight.severity}`}>
+                                <div className="tactical-alert-badge" aria-hidden="true">
+                                    <span className="material-symbols-outlined text-[16px]">
+                                        {insight.severity === 'high' ? 'warning' : insight.type === 'system' ? 'system_update_alt' : 'monitoring'}
+                                    </span>
+                                </div>
 
-                            {errors[insight.id] && (
-                                <div className="alert-error">{errors[insight.id]}</div>
-                            )}
-                        </div>
+                                <div className="tactical-alert-content">
+                                    <div className="tactical-alert-meta">
+                                        <span className={severityBadgeClass(insight.severity)}>
+                                            {insight.severity}
+                                        </span>
+                                        <span className="kai-badge">{insight.type}</span>
+                                        {insight.containerId && (
+                                            <span className="kai-badge kai-mono">{insight.containerId}</span>
+                                        )}
+                                    </div>
 
-                        <button
-                            className="dismiss-btn"
-                            onClick={() => handleDismiss(insight)}
-                            title="Dismiss alert"
-                            aria-label="Dismiss alert"
-                        >
-                            <span className="material-symbols-outlined text-[16px]">close</span>
-                        </button>
-                    </div>
-                ))}
-            </div>
-        </div>
+                                    <div className="tactical-alert-message">{insight.message}</div>
+                                    <div className="tactical-alert-suggestion">{insight.suggestion}</div>
+
+                                    <div className="tactical-alert-actions">
+                                        <button
+                                            type="button"
+                                            className="kai-btn kai-btn-primary kai-btn-xs"
+                                            disabled={isBusy || isDismissing}
+                                            onClick={() => handleExecuteSuggestion(insight)}
+                                        >
+                                            <span className={`material-symbols-outlined text-[14px] ${isBusy ? 'animate-spin' : ''}`} aria-hidden="true">
+                                                {isBusy ? 'sync' : actionIcon}
+                                            </span>
+                                            <span>{isBusy ? 'Working...' : actionLabel}</span>
+                                        </button>
+                                    </div>
+
+                                    {errors[insight.id] && (
+                                        <div className="kai-alert kai-alert-error text-xs mt-1" role="alert">
+                                            {errors[insight.id]}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button
+                                    type="button"
+                                    className="tactical-dismiss-btn"
+                                    onClick={() => handleDismiss(insight)}
+                                    disabled={isDismissing || isBusy}
+                                    aria-label="Dismiss alert"
+                                    title="Dismiss alert"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                                        close
+                                    </span>
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </section>
     );
 };

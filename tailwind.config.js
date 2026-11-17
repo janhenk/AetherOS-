@@ -4,35 +4,39 @@ export default {
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",
     ],
-    darkMode: "class",
+    darkMode: ['selector', '[data-theme="dark"]'],
     theme: {
         extend: {
             colors: {
-                "primary": "var(--lcars-primary)",
-                "secondary": "var(--lcars-secondary)",
-                "background-light": "#f6f8f8",
-                "background-dark": "var(--lcars-bg)",
+                primary: "var(--accent-primary)",
+                secondary: "var(--accent-hover)",
+                surface: "var(--bg-elevated)",
+                canvas: "var(--bg-primary)",
+                ink: "var(--text-primary)",
+                muted: "var(--text-muted)",
+                border: "var(--border-color)",
+                "bg-secondary": "var(--bg-secondary)",
+                "bg-tertiary": "var(--bg-tertiary)",
+                "text-secondary": "var(--text-secondary)",
+                success: "var(--success-color)",
+                warning: "var(--warning-color)",
+                danger: "var(--danger-color)",
+                info: "var(--info-color)",
             },
             fontFamily: {
-                "display": ["Spline Sans", "sans-serif"]
+                sans: ["'Plus Jakarta Sans'", "'Inter'", "system-ui", "-apple-system", "sans-serif"],
+                display: ["'Plus Jakarta Sans'", "'Inter'", "system-ui", "-apple-system", "sans-serif"],
+                mono: ["'JetBrains Mono'", "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
             },
             borderRadius: {
-                "DEFAULT": "1rem",
-                "lg": "2rem",
-                "xl": "3rem",
-                "full": "9999px"
+                DEFAULT: "10px",
+                sm: "6px",
+                md: "10px",
+                lg: "14px",
+                xl: "20px",
+                full: "9999px",
             },
-            keyframes: {
-                pan: {
-                    '0%': { backgroundPosition: '0% 0%' },
-                    '50%': { backgroundPosition: '100% 100%' },
-                    '100%': { backgroundPosition: '0% 0%' },
-                }
-            },
-            animation: {
-                'pan-slow': 'pan 60s ease-in-out infinite',
-            }
         },
     },
     plugins: [],
-}
+};

@@ -1,15 +1,37 @@
-import { memo, useState, useEffect, useRef } from 'react';
-import { useAppContext } from '../../context/AppContext';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAppContext } from '../../context/useAppContext';
 import { apiFetch } from '../../utils/api';
+
+type LogSource = 'updater' | 'agent' | 'comms';
+
+const LOG_TABS: { id: LogSource; label: string; icon: string }[] = [
+    { id: 'updater', label: 'Updater', icon: 'system_update' },
+    { id: 'agent', label: 'Agent Loop', icon: 'smart_toy' },
+    { id: 'comms', label: 'Comms & Audit', icon: 'forum' },
+];
 
 const LogViewerModal = memo(function LogViewerModal() {
     const { state, dispatch } = useAppContext();
-    const [activeTab, setActiveTab] = useState<'updater' | 'agent' | 'comms'>('updater');
+    const [activeTab, setActiveTab] = useState<LogSource>('updater');
     const [logs, setLogs] = useState<string>('');
+    const [searchQuery, setSearchQuery] = useState('');
     const [autoScroll, setAutoScroll] = useState(true);
+    const [copied, setCopied] = useState(false);
     const terminalRef = useRef<HTMLPreElement>(null);
 
-    // Poll logs
+    const handleClose = useCallback(() => {
+        dispatch({ type: 'TOGGLE_LOG_VIEWER' });
+    }, [dispatch]);
+
+    useEffect(() => {
+        if (!state.isLogViewerOpen) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') handleClose();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [handleClose, state.isLogViewerOpen]);
+
     useEffect(() => {
         if (!state.isLogViewerOpen) return;
 
@@ -18,28 +40,42 @@ const LogViewerModal = memo(function LogViewerModal() {
             try {
                 const res = await apiFetch(`/api/logs/${activeTab}`);
                 if (res.ok && isMounted) {
-                    const data = await res.json();
+                    const data = (await res.json()) as { logs?: string };
                     setLogs(data.logs || '[SYSTEM] No logs available.');
                 }
-            } catch (err) {
-                if (isMounted) setLogs('[SYSTEM] Error retrieving logs: ' + (err as Error).message);
+            } catch (err: unknown) {
+                if (isMounted) {
+                    const message = err instanceof Error ? err.message : 'Unknown error';
+                    setLogs(`[SYSTEM] Error retrieving logs: ${message}`);
+                }
             }
         };
 
-        fetchLogs();
-        const interval = setInterval(fetchLogs, 3000); // poll every 3 seconds
+        void fetchLogs();
+        const interval = window.setInterval(() => {
+            void fetchLogs();
+        }, 3000);
+
         return () => {
             isMounted = false;
-            clearInterval(interval);
+            window.clearInterval(interval);
         };
     }, [activeTab, state.isLogViewerOpen]);
 
-    // Auto-scroll logic
+    const filteredLogs = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        if (!query) return logs;
+        return logs
+            .split('\n')
+            .filter((line) => line.toLowerCase().includes(query))
+            .join('\n');
+    }, [logs, searchQuery]);
+
     useEffect(() => {
         if (autoScroll && terminalRef.current) {
             terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
         }
-    }, [logs, autoScroll]);
+    }, [filteredLogs, autoScroll]);
 
     const handleScroll = () => {
         if (!terminalRef.current) return;
@@ -48,90 +84,159 @@ const LogViewerModal = memo(function LogViewerModal() {
         setAutoScroll(isAtBottom);
     };
 
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(filteredLogs || logs);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 2000);
+        } catch (err: unknown) {
+            console.error('Failed to copy logs:', err);
+        }
+    };
+
     if (!state.isLogViewerOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <div 
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-                onClick={() => dispatch({ type: 'TOGGLE_LOG_VIEWER' })}
-            />
-
-            {/* Modal */}
-            <div className="relative flex flex-col w-full max-w-5xl h-[80vh] bg-[#0a0f12]/95 border border-primary/20 rounded-2xl shadow-2xl shadow-primary/10 overflow-hidden transform transition-all">
-                
-                {/* Header elements */}
-                <div className="absolute top-0 left-0 w-32 h-1 bg-gradient-to-r from-primary to-transparent" />
-                <div className="absolute top-0 right-0 w-32 h-1 bg-gradient-to-l from-secondary to-transparent" />
-                <div className="absolute -top-10 -left-10 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
-                
+        <div
+            className="kai-modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label="System Logs"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) handleClose();
+            }}
+        >
+            <div className="kai-modal" style={{ maxWidth: '64rem', height: '82vh' }}>
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 pb-4 border-b border-white/5 relative z-10">
-                    <div className="flex items-center gap-4">
-                        <div className="h-3 w-3 rounded-full bg-primary neon-aura-primary animate-pulse" />
+                <div className="kai-modal-header">
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-xl" style={{ color: 'var(--accent-primary)' }}>
+                            article
+                        </span>
                         <div>
-                            <h2 className="text-xl font-bold uppercase tracking-[0.2em] text-white">System Diagnostics</h2>
-                            <p className="text-xs text-primary/60 tracking-widest uppercase mt-1">Live Telemetry Feed</p>
+                            <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                                System Logs
+                            </h2>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                Live service diagnostics and audit stream
+                            </p>
                         </div>
                     </div>
-                    <button 
-                        onClick={() => dispatch({ type: 'TOGGLE_LOG_VIEWER' })}
-                        className="group flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/5 transition-colors"
-                    >
-                        <svg className="h-5 w-5 text-white/50 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+
+                    <div className="flex items-center gap-2">
+                        <span className="kai-badge kai-badge-accent kai-tabular">
+                            <span
+                                className="h-1.5 w-1.5 rounded-full animate-pulse"
+                                style={{ backgroundColor: 'var(--accent-primary)' }}
+                            />
+                            Polling: 3s
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleClose}
+                            className="kai-btn kai-btn-ghost kai-btn-icon"
+                            aria-label="Close system logs"
+                        >
+                            <span className="material-symbols-outlined text-lg">close</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div className="flex flex-1 overflow-hidden">
-                    {/* Sidebar Tabs */}
-                    <div className="w-48 bg-white/[0.02] border-r border-white/5 flex flex-col p-4 gap-2">
-                        {['updater', 'agent', 'comms'].map((tab) => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab as any)}
-                                className={`px-4 py-3 text-left text-xs uppercase tracking-widest font-bold rounded-lg transition-all ${
-                                    activeTab === tab 
-                                    ? 'bg-primary/20 text-primary border border-primary/30' 
-                                    : 'text-white/40 hover:text-white hover:bg-white/5'
-                                }`}
-                            >
-                                {tab === 'comms' ? 'Subspace Comms' : tab}
-                            </button>
-                        ))}
-                    </div>
-                    
-                    {/* Log Terminal */}
-                    <div className="flex-1 flex flex-col relative bg-black">
-                        <pre 
-                            ref={terminalRef}
-                            onScroll={handleScroll}
-                            className="flex-1 p-4 overflow-y-auto text-[11px] md:text-xs font-mono text-green-400 whitespace-pre-wrap select-text selection:bg-primary/30"
-                            style={{ 
-                                lineHeight: '1.4', 
-                                tabSize: 2 
-                            }}
-                        >
-                            {logs}
-                        </pre>
-                        
-                        {/* Auto-scroll Status */}
-                        {!autoScroll && (
-                            <div className="absolute bottom-4 right-4 animate-fade-in fade-in">
-                                <button 
-                                    onClick={() => setAutoScroll(true)}
-                                    className="bg-primary text-black text-[10px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-full shadow-lg shadow-black/50 hover:bg-white transition-colors"
+                {/* Controls Bar */}
+                <div
+                    className="px-5 py-3 border-b flex flex-wrap items-center justify-between gap-3 shrink-0"
+                    style={{
+                        backgroundColor: 'var(--bg-secondary)',
+                        borderColor: 'var(--border-subtle)',
+                    }}
+                >
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {LOG_TABS.map((tab) => {
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`kai-btn kai-btn-sm ${isActive ? 'kai-btn-primary' : 'kai-btn-secondary'}`}
                                 >
-                                    Resume Auto-Scroll ↓
+                                    <span className="material-symbols-outlined text-base">{tab.icon}</span>
+                                    <span>{tab.label}</span>
                                 </button>
-                            </div>
-                        )}
-                        <div className="absolute top-0 right-0 p-2 text-[10px] text-white/20 font-mono uppercase">
-                            Polling: 3s
-                        </div>
+                            );
+                        })}
                     </div>
+
+                    <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
+                        <div className="relative flex-1 sm:w-64">
+                            <span
+                                className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-base pointer-events-none"
+                                style={{ color: 'var(--text-muted)' }}
+                            >
+                                search
+                            </span>
+                            <input
+                                type="text"
+                                className="kai-input"
+                                style={{ minHeight: '2rem', paddingLeft: '2.1rem', fontSize: 'var(--text-xs)' }}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Filter log lines..."
+                                aria-label="Filter log lines"
+                            />
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                void handleCopy();
+                            }}
+                            className="kai-btn kai-btn-secondary kai-btn-sm shrink-0"
+                        >
+                            <span className="material-symbols-outlined text-base">
+                                {copied ? 'check' : 'content_copy'}
+                            </span>
+                            <span>{copied ? 'Copied' : 'Copy'}</span>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Log Output */}
+                <div className="flex-1 min-h-0 relative flex flex-col" style={{ backgroundColor: 'var(--bg-primary)' }}>
+                    <pre
+                        ref={terminalRef}
+                        onScroll={handleScroll}
+                        className="flex-1 p-4 overflow-y-auto text-xs kai-mono whitespace-pre-wrap select-text leading-relaxed"
+                        style={{ color: 'var(--text-primary)', tabSize: 2 }}
+                    >
+                        {filteredLogs || '[SYSTEM] No matching log lines.'}
+                    </pre>
+
+                    {!autoScroll && (
+                        <div className="absolute bottom-4 right-4">
+                            <button
+                                type="button"
+                                onClick={() => setAutoScroll(true)}
+                                className="kai-btn kai-btn-primary kai-btn-sm"
+                            >
+                                <span className="material-symbols-outlined text-base">arrow_downward</span>
+                                Resume Auto-Scroll
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="kai-modal-footer justify-between">
+                    <span className="text-xs kai-mono" style={{ color: 'var(--text-muted)' }}>
+                        Source: {activeTab}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={handleClose}
+                        className="kai-btn kai-btn-secondary kai-btn-sm"
+                    >
+                        Close
+                    </button>
                 </div>
             </div>
         </div>

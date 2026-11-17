@@ -1,4 +1,4 @@
-/* Clean Terminal Custom Scrollbar */
+/* Kai Terminal Custom Scrollbar */
 .terminal-scroll::-webkit-scrollbar {
     width: 6px;
 }
@@ -8,10 +8,10 @@
 }
 
 .terminal-scroll::-webkit-scrollbar-thumb {
-    background: rgba(0, 255, 255, 0.2);
-    border-radius: 6px;
+    background: var(--border-strong);
+    border-radius: var(--radius-full);
 }
 
 .terminal-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 255, 255, 0.4);
+    background: var(--accent-primary);
 }

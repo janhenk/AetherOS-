@@ -195,7 +195,7 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
             let chatData = fs.existsSync(CHAT_FILE) ? JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8')) : {};
             chatData[sessionId] = [];
             fs.writeFileSync(CHAT_FILE, JSON.stringify(chatData, null, 2));
-            await say({ text: "Amnesia protocol initiated. Conversation context erased.", thread_ts: event.ts });
+            await say({ text: "Conversation context cleared.", thread_ts: event.ts });
             return;
         }
 
@@ -203,7 +203,7 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
         if (['help', 'list', 'agents', 'hi', 'hello'].includes(rawText.toLowerCase())) {
             const agentList = AGENTS.map(a => `*${a.id}* - ${a.name} (${a.shortName})`).join('\n');
             await say({
-                text: `*AetherOS Slack Integration Help*\n\nTo interact with an AI agent, prefix your message with its ID (e.g., \`nav status\`). In DMs, I remember which agent you last spoke to!\n\n*Available Agents:*\n${agentList}\n\n_System status: Nominal._\n_Type \`clear\` to reset our conversation memory._`,
+                text: `*Kai Ops Slack Integration Help*\n\nTo interact with an operations agent, prefix your message with its ID (e.g., \`nav status\`). In DMs, I remember which agent you last spoke to.\n\n*Available Agents:*\n${agentList}\n\n_System status: Online._\n_Type \`clear\` to reset conversation memory._`,
                 thread_ts: event.ts // Use event.ts to reply to the specific message even in DMs
             });
             return;
@@ -251,7 +251,7 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
         fs.writeFileSync(CHANNEL_AGENTS_FILE, JSON.stringify(channelAgents, null, 2));
         
         // Let user know we are thinking
-        const thinkingMsg = await say({ text: `_AetherOS ${agentId.toUpperCase()} is processing..._`, thread_ts: threadTs });
+        const thinkingMsg = await say({ text: `_Agent ${agentId.toUpperCase()} is processing..._`, thread_ts: threadTs });
 
         // Load history 
         let chatData = fs.existsSync(CHAT_FILE) ? JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8')) : {};
@@ -276,7 +276,7 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
 
         // Get the latest agent response text
         const responseMsgs = newHistory.filter(m => m.role === 'agent');
-        let finalResponse = "Task completed. Protocols executing as expected.";
+        let finalResponse = "Task completed.";
         if (responseMsgs.length > 0) {
             // Filter for messages that aren't tool responses AND aren't empty
             const nonToolMsgs = responseMsgs.filter(m => !m.content.startsWith('TOOL_') && m.content.trim() !== '');

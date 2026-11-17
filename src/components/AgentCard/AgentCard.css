@@ -1,81 +1,95 @@
-/* ────── Agent Card ────── */
-.agent-card {
+.kai-agent-card {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    cursor: pointer;
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition:
+        border-color var(--duration-fast) var(--ease-out),
+        background-color var(--duration-fast) var(--ease-out),
+        box-shadow var(--duration-fast) var(--ease-out);
 }
 
-.agent-card-header {
+.kai-agent-card:hover {
+    border-color: var(--border-strong);
+}
+
+.kai-agent-card.is-active {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary), var(--shadow-xs);
+}
+
+.kai-agent-card-main {
+    appearance: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
-    border-top-left-radius: var(--radius-pill);
-    border-bottom-left-radius: var(--radius-pill);
-    color: var(--lcars-onyx);
-    background: var(--agent-color, var(--lcars-sage));
-    transition: filter var(--trans-fast);
+    gap: var(--space-3);
+    width: 100%;
+    padding: var(--space-3);
+    background: transparent;
+    border: 0;
+    text-align: left;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease-out);
 }
 
-.agent-card:hover .agent-card-header {
-    filter: brightness(1.1);
+.kai-agent-card-main:hover {
+    background-color: var(--hover-bg);
 }
 
-.agent-card.active .agent-card-header {
-    animation: pulse-glow 2.5s ease-in-out infinite;
-    --glow-color: color-mix(in srgb, var(--agent-color, var(--lcars-sage)), transparent 55%);
+.kai-agent-card.is-active .kai-agent-card-main {
+    background-color: var(--accent-subtle);
 }
 
-.agent-card-identity {
+.kai-agent-card-identity {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
+    min-width: 0;
 }
 
-.agent-card-name {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--lcars-onyx);
+.kai-agent-card-icon {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
 }
 
-.agent-card-status-text {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--lcars-onyx);
+.kai-agent-card.is-active .kai-agent-card-icon {
+    color: var(--accent-primary);
 }
 
-/* Sub-info strip */
-.agent-card-sub {
-    background: rgba(0, 0, 0, 0.25);
-    padding: 5px 8px 5px 28px;
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    border-left: 4px solid var(--agent-color, var(--lcars-sage));
-    color: var(--agent-color, var(--lcars-sage));
+.kai-agent-card-titles {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.kai-agent-card-name {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.25;
+}
+
+.kai-agent-card-role {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kai-agent-card-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
-}
-
-.agent-card-clear-btn {
-    background: none;
-    border: none;
-    color: rgba(0, 0, 0, 0.45);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    cursor: pointer;
-    padding: 0 4px;
-    transition: color var(--trans-fast);
-    text-transform: uppercase;
-}
-
-.agent-card-clear-btn:hover {
-    color: var(--lcars-onyx);
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--border-subtle);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
 }

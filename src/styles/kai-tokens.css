@@ -1,0 +1,380 @@
+/* ==========================================================================
+   Kai Design System - Multi-Theme Design Tokens
+   Themes: dark (default), light, subtle, monochrome
+   ========================================================================== */
+
+:root {
+  /* Dynamic base font scale (clamped 12px-22px, default 14px) */
+  --app-base-font-size: 14px;
+
+  /* Font Families */
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  /* Fluid Typography Scale (rem-based so --app-base-font-size scales proportionally) */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: clamp(1.2rem, 1.1rem + 0.4vw, 1.375rem);
+  --text-2xl: clamp(1.4rem, 1.2rem + 0.8vw, 1.75rem);
+  --text-3xl: clamp(1.75rem, 1.4rem + 1.4vw, 2.35rem);
+  --text-display: clamp(2rem, 1.5rem + 2.2vw, 3.25rem);
+
+  /* Geometric Spacing Scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Motion */
+  --duration-instant: 90ms;
+  --duration-fast: 160ms;
+  --duration-base: 240ms;
+  --duration-slow: 380ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+html {
+  font-size: var(--app-base-font-size, 14px);
+}
+
+/* ==========================================================================
+   Theme 1: Dark (Obsidian Minimal - Default)
+   ========================================================================== */
+:root,
+[data-theme='dark'],
+.theme-dark,
+body.theme-dark {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg-primary: #0A0B0D;
+  --bg-secondary: #101216;
+  --bg-tertiary: #171A20;
+  --bg-elevated: #12151B;
+  --bg-overlay: rgba(5, 6, 8, 0.78);
+  --surface-highlight: rgba(255, 255, 255, 0.05);
+  --hover-bg: rgba(255, 255, 255, 0.05);
+  --progress-bg: rgba(255, 255, 255, 0.08);
+
+  /* Ink */
+  --text-primary: #F3F4F6;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+  --text-inverse: #0A0B0D;
+
+  /* Borders & Focus */
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --focus-ring: rgba(96, 165, 250, 0.55);
+  --focus-ring-halo: rgba(96, 165, 250, 0.28);
+
+  /* Accent & Status */
+  --accent-primary: #3B82F6;
+  --accent-hover: #60A5FA;
+  --accent-btn-hover: #2563EB;
+  --accent-subtle: rgba(59, 130, 246, 0.14);
+  --accent-text: #93C5FD;
+  --accent-contrast: #FFFFFF;
+
+  --success-color: #22C55E;
+  --success-subtle: rgba(34, 197, 94, 0.14);
+  --success-text: #4ADE80;
+  --success-contrast: #052E16;
+
+  --warning-color: #F59E0B;
+  --warning-subtle: rgba(245, 158, 11, 0.14);
+  --warning-text: #FBBF24;
+  --warning-contrast: #0A0B0D;
+
+  --danger-color: #EF4444;
+  --danger-btn-bg: #DC2626;
+  --danger-btn-hover: #B91C1C;
+  --danger-subtle: rgba(239, 68, 68, 0.14);
+  --danger-text: #FCA5A5;
+  --danger-contrast: #FFFFFF;
+
+  --info-color: #38BDF8;
+  --info-subtle: rgba(56, 189, 248, 0.14);
+  --info-text: #7DD3FC;
+  --info-contrast: #0A0B0D;
+
+  /* Depth Shadows */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 1px 0 var(--surface-highlight);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--surface-highlight);
+  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.46), 0 2px 8px rgba(0, 0, 0, 0.28), inset 0 1px 0 var(--surface-highlight);
+  --shadow-lg: 0 22px 48px rgba(0, 0, 0, 0.58), 0 6px 16px rgba(0, 0, 0, 0.34), inset 0 1px 0 var(--surface-highlight);
+
+  /* Component Aliases */
+  --card-bg: var(--bg-elevated);
+  --input-bg: #0E1015;
+  --input-border: rgba(255, 255, 255, 0.12);
+  --nav-bg: rgba(16, 18, 22, 0.88);
+  --modal-bg: var(--bg-elevated);
+  --kai-select-chevron: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%239CA3AF' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.75' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+
+  /* Legacy Compatibility Aliases */
+  --lcars-primary: var(--accent-primary);
+  --lcars-secondary: var(--accent-hover);
+  --lcars-bg: var(--bg-primary);
+  --lcars-text: var(--text-primary);
+  --lcars-text-dim: var(--text-secondary);
+  --lcars-sage: var(--accent-primary);
+  --lcars-warning: var(--warning-color);
+  --lcars-border: var(--border-color);
+}
+
+/* ==========================================================================
+   Theme 2: Light (Paper Architectural)
+   ========================================================================== */
+[data-theme='light'],
+.theme-light,
+body.theme-light {
+  color-scheme: light;
+
+  --bg-primary: #FAFAFA;
+  --bg-secondary: #F3F4F6;
+  --bg-tertiary: #E5E7EB;
+  --bg-elevated: #FFFFFF;
+  --bg-overlay: rgba(17, 19, 24, 0.45);
+  --surface-highlight: rgba(255, 255, 255, 0.85);
+  --hover-bg: rgba(17, 19, 24, 0.04);
+  --progress-bg: rgba(17, 19, 24, 0.08);
+
+  --text-primary: #111318;
+  --text-secondary: #4B5563;
+  --text-muted: #6B7280;
+  --text-inverse: #FFFFFF;
+
+  --border-color: rgba(17, 19, 24, 0.09);
+  --border-subtle: rgba(17, 19, 24, 0.06);
+  --border-strong: rgba(17, 19, 24, 0.18);
+  --focus-ring: rgba(37, 99, 235, 0.4);
+  --focus-ring-halo: rgba(37, 99, 235, 0.22);
+
+  --accent-primary: #2563EB;
+  --accent-hover: #1D4ED8;
+  --accent-btn-hover: #1D4ED8;
+  --accent-subtle: rgba(37, 99, 235, 0.10);
+  --accent-text: #1D4ED8;
+  --accent-contrast: #FFFFFF;
+
+  --success-color: #15803D;
+  --success-subtle: rgba(21, 128, 61, 0.10);
+  --success-text: #166534;
+  --success-contrast: #FFFFFF;
+
+  --warning-color: #B45309;
+  --warning-subtle: rgba(180, 83, 9, 0.10);
+  --warning-text: #92400E;
+  --warning-contrast: #FFFFFF;
+
+  --danger-color: #DC2626;
+  --danger-btn-bg: #DC2626;
+  --danger-btn-hover: #B91C1C;
+  --danger-subtle: rgba(220, 38, 38, 0.10);
+  --danger-text: #B91C1C;
+  --danger-contrast: #FFFFFF;
+
+  --info-color: #0369A1;
+  --info-subtle: rgba(3, 105, 161, 0.10);
+  --info-text: #075985;
+  --info-contrast: #FFFFFF;
+
+  --shadow-xs: 0 1px 2px rgba(17, 19, 24, 0.05), inset 0 1px 0 var(--surface-highlight);
+  --shadow-sm: 0 2px 6px rgba(17, 19, 24, 0.06), 0 1px 2px rgba(17, 19, 24, 0.04), inset 0 1px 0 var(--surface-highlight);
+  --shadow-md: 0 10px 24px rgba(17, 19, 24, 0.08), 0 2px 6px rgba(17, 19, 24, 0.04), inset 0 1px 0 var(--surface-highlight);
+  --shadow-lg: 0 20px 44px rgba(17, 19, 24, 0.12), 0 6px 14px rgba(17, 19, 24, 0.06), inset 0 1px 0 var(--surface-highlight);
+
+  --card-bg: var(--bg-elevated);
+  --input-bg: #FFFFFF;
+  --input-border: rgba(17, 19, 24, 0.14);
+  --nav-bg: rgba(250, 250, 250, 0.90);
+  --modal-bg: var(--bg-elevated);
+  --kai-select-chevron: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%234B5563' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.75' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+
+  --lcars-primary: var(--accent-primary);
+  --lcars-secondary: var(--accent-hover);
+  --lcars-bg: var(--bg-primary);
+  --lcars-text: var(--text-primary);
+  --lcars-text-dim: var(--text-secondary);
+  --lcars-sage: var(--accent-primary);
+  --lcars-warning: var(--warning-color);
+  --lcars-border: var(--border-color);
+}
+
+/* ==========================================================================
+   Theme 3: Subtle (Nordic Stone)
+   ========================================================================== */
+[data-theme='subtle'],
+.theme-subtle,
+body.theme-subtle {
+  color-scheme: light;
+
+  --bg-primary: #F1F0EC;
+  --bg-secondary: #E8E6E0;
+  --bg-tertiary: #DDDAD2;
+  --bg-elevated: #F8F7F4;
+  --bg-overlay: rgba(28, 30, 33, 0.42);
+  --surface-highlight: rgba(255, 255, 255, 0.72);
+  --hover-bg: rgba(28, 30, 33, 0.045);
+  --progress-bg: rgba(28, 30, 33, 0.09);
+
+  --text-primary: #1C1E21;
+  --text-secondary: #52565E;
+  --text-muted: #70757E;
+  --text-inverse: #F8F7F4;
+
+  --border-color: rgba(28, 30, 33, 0.10);
+  --border-subtle: rgba(28, 30, 33, 0.07);
+  --border-strong: rgba(28, 30, 33, 0.20);
+  --focus-ring: rgba(15, 118, 110, 0.42);
+  --focus-ring-halo: rgba(15, 118, 110, 0.22);
+
+  --accent-primary: #0F766E;
+  --accent-hover: #0D9488;
+  --accent-btn-hover: #115E59;
+  --accent-subtle: rgba(15, 118, 110, 0.11);
+  --accent-text: #115E59;
+  --accent-contrast: #FFFFFF;
+
+  --success-color: #166534;
+  --success-subtle: rgba(22, 101, 52, 0.10);
+  --success-text: #14532D;
+  --success-contrast: #FFFFFF;
+
+  --warning-color: #9A3412;
+  --warning-subtle: rgba(154, 52, 18, 0.10);
+  --warning-text: #7C2D12;
+  --warning-contrast: #FFFFFF;
+
+  --danger-color: #B91C1C;
+  --danger-btn-bg: #B91C1C;
+  --danger-btn-hover: #991B1B;
+  --danger-subtle: rgba(185, 28, 28, 0.10);
+  --danger-text: #991B1B;
+  --danger-contrast: #FFFFFF;
+
+  --info-color: #0E7490;
+  --info-subtle: rgba(14, 116, 144, 0.10);
+  --info-text: #155E75;
+  --info-contrast: #FFFFFF;
+
+  --shadow-xs: 0 1px 2px rgba(28, 30, 33, 0.05), inset 0 1px 0 var(--surface-highlight);
+  --shadow-sm: 0 2px 6px rgba(28, 30, 33, 0.06), 0 1px 2px rgba(28, 30, 33, 0.04), inset 0 1px 0 var(--surface-highlight);
+  --shadow-md: 0 10px 24px rgba(28, 30, 33, 0.08), 0 2px 6px rgba(28, 30, 33, 0.04), inset 0 1px 0 var(--surface-highlight);
+  --shadow-lg: 0 20px 44px rgba(28, 30, 33, 0.12), 0 6px 14px rgba(28, 30, 33, 0.06), inset 0 1px 0 var(--surface-highlight);
+
+  --card-bg: var(--bg-elevated);
+  --input-bg: #F8F7F4;
+  --input-border: rgba(28, 30, 33, 0.15);
+  --nav-bg: rgba(241, 240, 236, 0.90);
+  --modal-bg: var(--bg-elevated);
+  --kai-select-chevron: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2352565E' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.75' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+
+  --lcars-primary: var(--accent-primary);
+  --lcars-secondary: var(--accent-hover);
+  --lcars-bg: var(--bg-primary);
+  --lcars-text: var(--text-primary);
+  --lcars-text-dim: var(--text-secondary);
+  --lcars-sage: var(--accent-primary);
+  --lcars-warning: var(--warning-color);
+  --lcars-border: var(--border-color);
+}
+
+/* ==========================================================================
+   Theme 4: Monochrome (Pure High Contrast)
+   ========================================================================== */
+[data-theme='monochrome'],
+.theme-monochrome,
+body.theme-monochrome {
+  color-scheme: light;
+
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F4F4F5;
+  --bg-tertiary: #E4E4E7;
+  --bg-elevated: #FFFFFF;
+  --bg-overlay: rgba(9, 9, 11, 0.55);
+  --surface-highlight: rgba(255, 255, 255, 0.92);
+  --hover-bg: rgba(9, 9, 11, 0.05);
+  --progress-bg: #E4E4E7;
+
+  --text-primary: #09090B;
+  --text-secondary: #3F3F46;
+  --text-muted: #52525B;
+  --text-inverse: #FFFFFF;
+
+  --border-color: #D4D4D8;
+  --border-subtle: #E4E4E7;
+  --border-strong: #18181B;
+  --focus-ring: #2563EB;
+  --focus-ring-halo: rgba(37, 99, 235, 0.25);
+
+  --accent-primary: #09090B;
+  --accent-hover: #27272A;
+  --accent-btn-hover: #27272A;
+  --accent-subtle: rgba(9, 9, 11, 0.06);
+  --accent-text: #09090B;
+  --accent-contrast: #FFFFFF;
+
+  --success-color: #166534;
+  --success-subtle: rgba(22, 101, 52, 0.09);
+  --success-text: #14532D;
+  --success-contrast: #FFFFFF;
+
+  --warning-color: #9A3412;
+  --warning-subtle: rgba(154, 52, 18, 0.09);
+  --warning-text: #7C2D12;
+  --warning-contrast: #FFFFFF;
+
+  --danger-color: #B91C1C;
+  --danger-btn-bg: #B91C1C;
+  --danger-btn-hover: #991B1B;
+  --danger-subtle: rgba(185, 28, 28, 0.09);
+  --danger-text: #991B1B;
+  --danger-contrast: #FFFFFF;
+
+  --info-color: #1E40AF;
+  --info-subtle: rgba(30, 64, 175, 0.09);
+  --info-text: #1E3A8A;
+  --info-contrast: #FFFFFF;
+
+  --shadow-xs: 0 1px 2px rgba(9, 9, 11, 0.06), inset 0 1px 0 var(--surface-highlight);
+  --shadow-sm: 0 2px 6px rgba(9, 9, 11, 0.07), 0 1px 2px rgba(9, 9, 11, 0.05), inset 0 1px 0 var(--surface-highlight);
+  --shadow-md: 0 10px 24px rgba(9, 9, 11, 0.10), 0 2px 6px rgba(9, 9, 11, 0.05), inset 0 1px 0 var(--surface-highlight);
+  --shadow-lg: 0 20px 44px rgba(9, 9, 11, 0.14), 0 6px 14px rgba(9, 9, 11, 0.07), inset 0 1px 0 var(--surface-highlight);
+
+  --card-bg: var(--bg-elevated);
+  --input-bg: #FFFFFF;
+  --input-border: #A1A1AA;
+  --nav-bg: rgba(255, 255, 255, 0.92);
+  --modal-bg: var(--bg-elevated);
+  --kai-select-chevron: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2309090B' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.75' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+
+  --lcars-primary: var(--accent-primary);
+  --lcars-secondary: var(--accent-hover);
+  --lcars-bg: var(--bg-primary);
+  --lcars-text: var(--text-primary);
+  --lcars-text-dim: var(--text-secondary);
+  --lcars-sage: var(--accent-primary);
+  --lcars-warning: var(--warning-color);
+  --lcars-border: var(--border-color);
+}

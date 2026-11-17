@@ -1,60 +1,65 @@
 import { memo } from 'react';
-import { useAppContext } from '../../context/AppContext';
+import { useAppContext } from '../../context/useAppContext';
 
 const LogisticsStatus = memo(function LogisticsStatus() {
     const { state } = useAppContext();
     const { lastLatencyMs, model } = state.sessionMetrics;
+    const efficiency = Math.min(100, Math.max(60, 100 - lastLatencyMs / 50));
 
     return (
-        <div style={{
-            background: 'rgba(187,184,145,0.06)',
-            border: '1px solid rgba(187,184,145,0.15)',
-            borderRadius: 4,
-            padding: '10px 14px',
-        }}>
-            <div style={{
-                fontFamily: 'var(--font-display)', fontSize: 9,
-                letterSpacing: '0.18em', textTransform: 'uppercase',
-                color: 'var(--lcars-text-dim)', marginBottom: 8, fontWeight: 700,
-            }}>System Metrics</div>
+        <div className="kai-surface-subtle flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+                <span
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-secondary)' }}
+                >
+                    Session Metrics
+                </span>
+                <span className="kai-badge kai-badge-accent kai-tabular">
+                    {efficiency.toFixed(0)}% eff
+                </span>
+            </div>
 
-            <Row label="Model" value={model.replace('gemini-', '')} color="var(--lcars-sage)" />
-            <Row
-                label="Latency"
-                value={lastLatencyMs > 0 ? `${lastLatencyMs} ms` : '— ms'}
-                color="var(--lcars-silver-light)"
-            />
-            <div style={{ marginTop: 8 }}>
-                <div style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    fontFamily: 'var(--font-display)', fontSize: 9,
-                    textTransform: 'uppercase', letterSpacing: '0.1em',
-                    color: 'var(--lcars-text-dim)', marginBottom: 4,
-                    fontWeight: 700,
-                }}>
-                    <span>Efficiency</span>
-                    <span style={{ color: 'var(--lcars-sage)' }}>{Math.min(100, Math.max(60, 100 - lastLatencyMs / 50)).toFixed(0)}%</span>
+            <div className="flex items-center justify-between gap-2 text-xs">
+                <span style={{ color: 'var(--text-muted)' }}>Model</span>
+                <span
+                    className="kai-mono truncate font-medium"
+                    style={{ color: 'var(--text-primary)' }}
+                    title={model}
+                >
+                    {model.replace('gemini-', '')}
+                </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 text-xs">
+                <span style={{ color: 'var(--text-muted)' }}>Latency</span>
+                <span className="kai-mono kai-tabular font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {lastLatencyMs > 0 ? `${lastLatencyMs} ms` : '— ms'}
+                </span>
+            </div>
+
+            <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
+                    <span>Responsiveness</span>
+                    <span className="kai-mono kai-tabular" style={{ color: 'var(--accent-primary)' }}>
+                        {efficiency.toFixed(0)}%
+                    </span>
                 </div>
-                <div style={{ height: 4, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{
-                        height: '100%',
-                        width: `${Math.min(100, Math.max(60, 100 - lastLatencyMs / 50))}%`,
-                        background: 'var(--lcars-sage)',
-                        borderRadius: 2, transition: 'width 1s ease',
-                    }} />
+                <div
+                    className="h-1.5 w-full rounded-full overflow-hidden"
+                    style={{ backgroundColor: 'var(--progress-bg)' }}
+                >
+                    <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                            width: `${efficiency}%`,
+                            backgroundColor: 'var(--accent-primary)',
+                        }}
+                    />
                 </div>
             </div>
         </div>
     );
 });
-
-function Row({ label, value, color }: { label: string; value: string; color: string }) {
-    return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--lcars-text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>{label}</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color }}>{value}</span>
-        </div>
-    );
-}
 
 export default LogisticsStatus;

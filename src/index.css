@@ -1,59 +1,30 @@
-:root {
-  --lcars-primary: #34d3f3;
-  --lcars-secondary: #c084fc;
-  --lcars-accent: #fcd34d;
-  --lcars-bg: #0a0e12;
-  --lcars-text: #e2e8f0;
-  --lcars-text-dim: #94a3b8;
-  --lcars-sage: #94fde1;
-  --alert-red: #8b0000;
-  --alert-red-glow: rgba(139, 0, 0, 0.4);
-}
+@import './styles/kai-tokens.css';
+@import './styles/kai-components.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .glass-panel {
-    background: rgba(19, 200, 236, 0.12);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(19, 200, 236, 0.25);
-  }
-
-  .neon-aura-primary {
-    box-shadow: 0 0 15px rgba(19, 200, 236, 0.3);
-  }
-
-  .neon-aura-secondary {
-    box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
-  }
-
-  .incursion-alert {
-    --lcars-primary: var(--alert-red) !important;
-    --lcars-secondary: #1a0000 !important;
-    --lcars-accent: #660000 !important;
-    --lcars-bg: #050000 !important;
-    background: var(--lcars-bg) !important;
-    color: #ffbaba !important;
-    animation: alert-pulse 4s ease-in-out infinite;
-  }
-
-  .incursion-alert .glass-panel {
-    background: rgba(139, 0, 0, 0.1) !important;
-    border-color: rgba(139, 0, 0, 0.3) !important;
-    backdrop-filter: blur(20px) !important;
-  }
-
-  @keyframes alert-pulse {
-    0%, 100% { background: #050000; }
-    50% { background: #120000; }
+@layer base {
+  html,
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.5;
   }
 }
 
-/* Base scrollbar styling for webkit */
+@layer utilities {
+  .elevated-mode {
+    box-shadow: inset 0 2px 0 var(--warning-color);
+  }
+}
+
+/* Theme-aware scrollbars */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -61,6 +32,10 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(19, 200, 236, 0.2);
-  border-radius: 10px;
+  background: var(--border-strong);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
