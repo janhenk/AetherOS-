@@ -1,139 +1,223 @@
-import React, { useState, useEffect } from 'react';
+import { useId, useState, useEffect, type FormEvent } from 'react';
 import { apiFetch } from '../../utils/api';
+import { ThemeSwitcher } from '../../theme/ThemeSwitcher';
 
-export const AuthOverlay: React.FC<{ onAuthenticated: () => void }> = ({ onAuthenticated }) => {
-    const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(true);
+export function AuthOverlay({ onAuthenticated }: { onAuthenticated: () => void }) {
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const passwordInputId = useId();
 
-    useEffect(() => {
-        const checkStatus = async () => {
-            try {
-                // Use built-in fetch to bypass the interceptor on the /auth routes
-                const res = await fetch('/api/auth/status');
-                if (res.ok) {
-                    const data = await res.json();
-                    setNeedsSetup(data.needsSetup);
+  useEffect(() => {
+    let cancelled = false;
 
-                    // If NO setup needed and a token exists, try to validate it silently
-                    const token = localStorage.getItem('aetheros_token');
-                    if (!data.needsSetup && token) {
-                        try {
-                            const testRes = await apiFetch('/api/stats');
-                            if (testRes.ok) {
-                                onAuthenticated();
-                                return;
-                            }
-                        } catch (e) { /* Token invalid, surface login */ }
-                    }
-                }
-            } catch (err) {
-                setError('Failed to establish secure link to Core Systems.');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        checkStatus();
-    }, [onAuthenticated]);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!password) return;
-        setError('');
-        setLoading(true);
-        
-        const endpoint = needsSetup ? '/api/auth/setup' : '/api/auth/login';
-        try {
-            const res = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password })
-            });
-            const data = await res.json();
-            
-            if (res.ok && data.token) {
-                localStorage.setItem('aetheros_token', data.token);
-                onAuthenticated();
-            } else {
-                setError(data.error || 'Authentication Checksum Failed');
-            }
-        } catch (err) {
-            setError('Neural link disconnected.');
-        } finally {
-            setLoading(false);
+    const checkStatus = async () => {
+      try {
+        const res = await fetch('/api/auth/status');
+        if (!res.ok) {
+          if (!cancelled) {
+            setError('Unable to reach authentication service.');
+          }
+          return;
         }
+
+        const data = (await res.json()) as { needsSetup?: boolean };
+        if (cancelled) return;
+        const setupRequired = Boolean(data.needsSetup);
+        setNeedsSetup(setupRequired);
+
+        const token = localStorage.getItem('aetheros_token');
+        if (!setupRequired && token) {
+          try {
+            const testRes = await apiFetch('/api/stats');
+            if (testRes.ok && !cancelled) {
+              onAuthenticated();
+              return;
+            }
+          } catch (tokenErr: unknown) {
+            console.warn('Stored authentication token failed validation:', tokenErr);
+          }
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? `Connection error: ${err.message}`
+              : 'Failed to connect to the Kai Ops server.',
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     };
 
-    if (loading && needsSetup === null) {
-        return (
-            <div className="fixed inset-0 bg-[#0a0f18] flex items-center justify-center z-[100] text-primary font-mono tracking-widest text-sm animate-pulse">
-                ESTABLISHING SECURE HANDSHAKE...
-            </div>
-        );
+    void checkStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [onAuthenticated]);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!password) return;
+    setError('');
+    setLoading(true);
+
+    const endpoint = needsSetup ? '/api/auth/setup' : '/api/auth/login';
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = (await res.json()) as { token?: string; error?: string };
+
+      if (res.ok && data.token) {
+        localStorage.setItem('aetheros_token', data.token);
+        onAuthenticated();
+      } else {
+        setError(data.error || 'Authentication failed. Check your password and try again.');
+      }
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? `Sign in failed: ${err.message}`
+          : 'Unable to reach authentication service.',
+      );
+    } finally {
+      setLoading(false);
     }
+  };
 
+  if (loading && needsSetup === null) {
     return (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6">
-            <div className="max-w-md w-full glass-panel neon-aura-secondary rounded-2xl p-8 border border-secondary/30 shadow-[0_0_50px_rgba(245,158,11,0.15)] relative overflow-hidden">
-                
-                {/* Decorative Elements */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-secondary to-transparent opacity-50"></div>
-                <div className="absolute -top-10 -right-10 w-32 h-32 bg-secondary/10 blur-3xl rounded-full"></div>
-                <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-secondary/10 blur-3xl rounded-full"></div>
-
-                <div className="text-center mb-10 relative z-10">
-                    <span className="material-symbols-outlined text-6xl text-secondary block mb-4 filter drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]">
-                        {needsSetup ? 'admin_panel_settings' : 'lock'}
-                    </span>
-                    <h1 className="text-2xl font-bold text-slate-100 tracking-[0.2em] uppercase mb-2">
-                        {needsSetup ? 'System Initialization' : 'AetherOS Override'}
-                    </h1>
-                    <p className="text-xs text-secondary/70 tracking-widest uppercase font-mono">
-                        {needsSetup ? 'Establish core encryption key' : 'Provide administrative clearance'}
-                    </p>
-                </div>
-                
-                {error && (
-                    <div className="mb-8 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono tracking-widest text-center animate-fade-in flex items-center justify-center gap-2">
-                        <span className="material-symbols-outlined text-sm">warning</span>
-                        {error}
-                    </div>
-                )}
-                
-                <form onSubmit={handleSubmit} className="flex flex-col gap-6 relative z-10">
-                    <div className="relative">
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder={needsSetup ? "DEFINE COMMAND KEY" : "ENTER COMMAND KEY"}
-                            autoFocus
-                            className="w-full bg-[#0a0f18]/80 border-2 border-secondary/20 rounded-xl px-12 py-4 text-slate-100 placeholder-secondary/30 focus:border-secondary focus:shadow-[0_0_20px_rgba(245,158,11,0.2)] focus:outline-none transition-all text-center tracking-[0.3em] uppercase font-mono text-sm"
-                        />
-                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-secondary/50">key</span>
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={loading || !password}
-                        className="w-full rounded-xl bg-secondary text-black font-bold uppercase tracking-[0.2em] py-4 hover:bg-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-3 mt-2"
-                    >
-                        {loading ? (
-                            <span className="material-symbols-outlined animate-spin text-lg">sync</span>
-                        ) : (
-                            <span className="material-symbols-outlined text-lg">{needsSetup ? 'lock_reset' : 'login'}</span>
-                        )}
-                        {needsSetup ? 'Encrypt Node' : 'Authenticate'}
-                    </button>
-                </form>
-
-                <div className="mt-8 pt-6 border-t border-secondary/10 flex justify-between text-[10px] text-secondary/40 font-mono tracking-widest">
-                    <span>SECURE NODE // AETHEROS</span>
-                    <span>V 2.1.0</span>
-                </div>
-            </div>
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+        style={{
+          backgroundColor: 'var(--bg-primary)',
+          color: 'var(--text-secondary)',
+        }}
+      >
+        <div className="flex items-center gap-3 text-sm font-medium">
+          <span className="material-symbols-outlined animate-spin text-[20px]">sync</span>
+          <span>Connecting to Kai Ops...</span>
         </div>
+      </div>
     );
-};
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-4 sm:p-6"
+      style={{
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
+      }}
+    >
+      <div className="fixed right-4 top-4 sm:right-6 sm:top-6">
+        <ThemeSwitcher compact />
+      </div>
+
+      <div
+        className="kai-surface w-full max-w-md p-6 sm:p-8"
+        style={{ boxShadow: 'var(--shadow-lg)' }}
+      >
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div
+            className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg"
+            style={{
+              backgroundColor: 'var(--accent-subtle)',
+              color: 'var(--accent-text)',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <span className="material-symbols-outlined text-[26px]">
+              {needsSetup ? 'admin_panel_settings' : 'lock'}
+            </span>
+          </div>
+          <h1
+            className="text-xl font-bold tracking-tight"
+            style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
+          >
+            {needsSetup ? 'Initialize Kai Ops' : 'Sign in to Kai Ops'}
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            {needsSetup
+              ? 'Create an administrator password to secure this host console.'
+              : 'Enter your administrator password to manage containers and agents.'}
+          </p>
+        </div>
+
+        {error && (
+          <div className="kai-alert kai-alert-error mb-5 flex items-center gap-2 text-sm" role="alert">
+            <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4">
+          <div className="kai-field">
+            <label className="kai-label" htmlFor={passwordInputId}>
+              {needsSetup ? 'Administrator Password' : 'Password'}
+            </label>
+            <div className="relative">
+              <input
+                id={passwordInputId}
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={
+                  needsSetup ? 'Choose a strong password' : 'Enter administrator password'
+                }
+                autoComplete={needsSetup ? 'new-password' : 'current-password'}
+                autoFocus
+                className="kai-input pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="kai-btn kai-btn-ghost kai-btn-xs absolute right-1.5 top-1/2 -translate-y-1/2"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {showPassword ? 'visibility_off' : 'visibility'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || !password}
+            className="kai-btn kai-btn-primary w-full mt-1"
+          >
+            <span
+              className={`material-symbols-outlined text-[18px] ${
+                loading ? 'animate-spin' : ''
+              }`}
+              aria-hidden="true"
+            >
+              {loading ? 'sync' : needsSetup ? 'lock_reset' : 'login'}
+            </span>
+            <span>{needsSetup ? 'Complete Setup' : 'Sign In'}</span>
+          </button>
+        </form>
+
+        <div
+          className="mt-6 flex items-center justify-between border-t pt-4 text-xs"
+          style={{
+            borderColor: 'var(--border-subtle)',
+            color: 'var(--text-muted)',
+          }}
+        >
+          <span>Kai Ops Console</span>
+          <span className="kai-mono">Protected Session</span>
+        </div>
+      </div>
+    </div>
+  );
+}

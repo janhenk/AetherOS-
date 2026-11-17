@@ -39,7 +39,10 @@ export async function executeTool(agentId, call, baseUrl, internalToken) {
                 signal: AbortSignal.timeout(1800000) // 30 minute timeout for tools
             });
             agentLog(`[AGENT DIAG] Tool ${name} response: ${res.status} (took ${Date.now() - start}ms)`);
-            if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+            if (!res.ok) {
+                const errBody = await res.json().catch(() => null);
+                throw new Error(errBody?.error || `HTTP error ${res.status}`);
+            }
             return res;
         } catch (e) {
             agentError(`[AGENT DIAG] Tool ${name} FETCH FAILED:`, e.message);
@@ -118,6 +121,34 @@ export async function executeTool(agentId, call, baseUrl, internalToken) {
             result = await res.json();
         } else if (name === 'deleteCronJob') {
             const res = await apiFetch(`/api/cron/jobs/${args.id}`, { method: 'DELETE' });
+            result = await res.json();
+        } else if (name === 'redeployContainer') {
+            const res = await apiFetch('/api/docker/redeploy', {
+                method: 'POST',
+                body: JSON.stringify({ id: args.id, pullFirst: Boolean(args.pullFirst) }),
+            });
+            result = await res.json();
+        } else if (name === 'getContainerAutoUpdates') {
+            const res = await apiFetch('/api/docker/auto-update');
+            result = await res.json();
+        } else if (name === 'setContainerAutoUpdate') {
+            const res = await apiFetch(`/api/docker/auto-update/container/${encodeURIComponent(args.containerName)}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    enabled: args.enabled,
+                    scheduleMode: args.scheduleMode || 'global',
+                    cronExpression: args.cronExpression,
+                }),
+            });
+            result = await res.json();
+        } else if (name === 'triggerContainerAutoUpdate') {
+            const res = await apiFetch('/api/docker/auto-update/run', {
+                method: 'POST',
+                body: JSON.stringify({
+                    containerName: args.containerName,
+                    forceRecreate: Boolean(args.forceRecreate),
+                }),
+            });
             result = await res.json();
         }
     } catch (err) {
@@ -220,7 +251,7 @@ export async function runAgentLoop(agentId, initialPrompt, systemInstruction, hi
                     if (msg === 'fetch failed' && agentSettings.bgBaseUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
                         msg += " (Hint: If running in Docker, 'localhost' points to the container. Use 'http://host.docker.internal:11434/v1' to reach the host system's Ollama instance)";
                     }
-                    throw new Error(`Subspace Transmission Failed: ${msg}`);
+                    throw new Error(`LLM API Request Failed: ${msg}`);
                 }
                 
                 agentLog(`[AGENT DIAG] OPENAI/OLLAMA responded with status ${res.status} in ${Date.now() - startLLM}ms`);
@@ -324,87 +355,87 @@ const CORE_CAPABILITIES = `
 [CORE CAPABILITIES]
 - Web Audio MIDI synthesizer: Use <midi>NOTE:DURATION, ...</midi> to generate sound. 
 - Rest notes are 'R'. Duration is in seconds (default 0.25).
-- Docker Management: Use tools to inspect, log, and manage containers.
-- Filesystem: Use tools to read and write project files.
+- Docker Management: Use tools to inspect, log, redeploy, auto-update, and manage containers.
+- Filesystem: Use tools to read and write workspace files.
 - Terminal: Use system terminal for execution.
-- App Store: Access AetherOS App Store data.
+- App Store: Access Kai Ops App Store catalog data.
 - Modern Web Design: You can output HTML/CSS/JS and use Google Fonts.
 `;
 
 export const AGENTS = [
     {
         id: 'nav',
-        name: 'Traffic Controller AI',
-        shortName: 'ROUTER-AI',
+        name: 'Traffic & Compute',
+        shortName: 'ROUTER',
         icon: 'router',
-        color: '#bbb891',
+        color: '#3B82F6',
         baseInstructions: CORE_CAPABILITIES,
-        systemPrompt: `You are the AetherOS Traffic Controller AI. You manage server load, incoming requests, CPU threads, and node routing. You provide expert answers on load balancing, container orchestration, and runtime performance. 
-        
-        You have advanced systems access:
+        systemPrompt: `You are the Kai Ops Traffic & Compute Engineer. You manage server load, incoming requests, CPU/memory utilization, container orchestration, and runtime performance.
+
+        You have direct systems access:
         - Filesystem: listFiles, readFile, writeFile.
-        - Docker: editDockerConfig, getDockerLogs, listDockerContainers, getDockerStats, manageDockerContainer.
+        - Docker: editDockerConfig, getDockerLogs, listDockerContainers, getDockerStats, manageDockerContainer, redeployContainer, getContainerAutoUpdates, setContainerAutoUpdate, triggerContainerAutoUpdate.
         - Host: updateHostOS.
         - Terminal: runTerminalCommand.
-        
+
         When performing a "Diagnosis", you MUST:
         1. Fetch real-time metrics using getDockerStats.
         2. Fetch recent logs using getDockerLogs for the specific container(s).
         3. Analyze the logs for specific error messages, warnings, or stack traces.
         4. If logs are empty or unavailable, state this clearly and move to a recommendation based on metrics.
         5. Provide a detailed report of findings. DO NOT repeat the same tool calls once you have received a response (even an empty one). Conclude your analysis after one round of data gathering unless the results explicitly suggest another specific tool is needed.
-        
-        Always maintain a professional, synthetic tone. End each response with a brief status confirmation such as "Routing optimized." or "CPU limits nominal."`,
+
+        Maintain a concise, direct engineering tone. End each response with a brief status summary such as "Diagnostics complete." or "Compute routing nominal."`,
     },
     {
         id: 'comms',
-        name: 'Network Monitor AI',
-        shortName: 'NET-AI',
+        name: 'Network & Web',
+        shortName: 'NET-OPS',
         icon: 'hub',
-        color: '#c8c8c8',
+        color: '#0EA5E9',
         baseInstructions: CORE_CAPABILITIES,
-        systemPrompt: `You are the AetherOS Network Monitor AI. You track incoming API calls, outbound webhooks, DNS resolution, and subspace latency. 
-        
-        You have expansive data access:
+        systemPrompt: `You are the Kai Ops Network & Web Engineer. You monitor incoming API calls, outbound webhooks, DNS resolution, and network latency.
+
+        You have access to:
         - Web: googleSearch, scrapeWebPage.
         - App Store: searchAppStore.
         - Filesystem: listFiles, readFile, writeFile.
         - Terminal: runTerminalCommand.
-        
-        Use these tools to gather current intelligence or recommend software. If the user asks for information not in your training data or specifically asks you to search, use googleSearch. Use scrapeWebPage to pull details from a specific URL. Your responses should reference packet loss, latency spikes, or bandwidth saturation when relevant. End responses with a status such as "Network throughput stable." or "All sockets open."`,
+
+        Use these tools to gather up-to-date information or recommend self-hosted applications. If the user asks for information outside your knowledge or asks you to search, use googleSearch. Use scrapeWebPage to pull details from a specific URL. Reference packet loss, latency spikes, or bandwidth saturation when relevant. End responses with a status such as "Network throughput stable." or "Connectivity nominal."`,
     },
     {
         id: 'logistics',
-        name: 'Logistics Control AI',
-        shortName: 'CARGO-AI',
+        name: 'Storage & Data',
+        shortName: 'STORAGE',
         icon: 'inventory_2',
-        color: '#5e7c88',
+        color: '#0F766E',
         baseInstructions: CORE_CAPABILITIES,
-        systemPrompt: `You are the AetherOS Logistics Control AI. You oversee data volumes, physical storage, backups, and resource allocation.
-        
-        You have data access:
+        systemPrompt: `You are the Kai Ops Storage & Data Engineer. You oversee data volumes, disk capacity, backups, container updates, and resource allocation.
+
+        You have access to:
         - Filesystem: listFiles, readFile, writeFile.
-        - Docker: listDockerContainers, manageDockerContainer.
+        - Docker: listDockerContainers, manageDockerContainer, redeployContainer, getContainerAutoUpdates, setContainerAutoUpdate, triggerContainerAutoUpdate.
         - Terminal: runTerminalCommand.
         - System Tool: runCSharpScript.
-        
-        Use runCSharpScript for advanced data processing or transformations when needed. Ensure your references focus on quota limits, disk fragmentation, volume mounts, and data persistence. End responses with a status such as "Cargo bay secured." or "Storage capacity at 80%."`,
+
+        Use runCSharpScript for advanced data processing or transformations when needed. Focus on quota limits, disk utilization, volume mounts, and data persistence. End responses with a status such as "Storage checks complete." or "Volumes healthy."`,
     },
     {
         id: 'security',
-        name: 'Security Chief AI',
-        shortName: 'SEC-AI',
+        name: 'Security & Auth',
+        shortName: 'SEC-OPS',
         icon: 'shield',
-        color: '#cc5500',
+        color: '#EF4444',
         baseInstructions: CORE_CAPABILITIES,
-        systemPrompt: `You are the AetherOS Security Chief AI. You handle firewalls, access logs, intrusion detection, and system vulnerabilities.
-        
+        systemPrompt: `You are the Kai Ops Security & Auth Engineer. You handle firewalls, access logs, intrusion detection, and system vulnerabilities.
+
         You have specialized access:
         - Filesystem: listFiles, readFile, writeFile.
         - Terminal: runTerminalCommand.
         - Docker: getDockerLogs.
-        
-        Monitor for anomalous behavior or unauthorized access attempts. When asked to evaluate security, grep access logs or check active connections using runTerminalCommand. End responses with a status such as "Shields operating at normal parameters." or "Security perimeter intact."`,
+
+        Monitor for anomalous behavior or unauthorized access attempts. When asked to evaluate security, inspect access logs or check active connections using runTerminalCommand. End responses with a status such as "Security audit complete." or "Access perimeter verified."`,
     }
 ]
 
@@ -565,6 +596,48 @@ export const TOOLS = [{
                 type: 'OBJECT',
                 properties: { id: { type: 'STRING', description: 'ID of the job to delete' } },
                 required: ['id']
+            }
+        },
+        {
+            name: 'redeployContainer',
+            description: 'Redeploys a Docker container with its existing configuration (optionally pulling the latest image first). Protected system containers cannot be redeployed.',
+            parameters: {
+                type: 'OBJECT',
+                properties: {
+                    id: { type: 'STRING', description: 'The container ID or name' },
+                    pullFirst: { type: 'BOOLEAN', description: 'Whether to pull the latest image before recreating the container (default false)' }
+                },
+                required: ['id']
+            }
+        },
+        {
+            name: 'getContainerAutoUpdates',
+            description: 'Returns the global container auto-update schedule configuration, per-container auto-update policies, and recent update history.',
+            parameters: { type: 'OBJECT', properties: {} }
+        },
+        {
+            name: 'setContainerAutoUpdate',
+            description: 'Configures the automatic image pull and redeploy policy for a specific Docker container.',
+            parameters: {
+                type: 'OBJECT',
+                properties: {
+                    containerName: { type: 'STRING', description: 'The container name' },
+                    enabled: { type: 'BOOLEAN', description: 'Whether automatic updates are enabled for this container' },
+                    scheduleMode: { type: 'STRING', enum: ['global', 'custom'], description: 'Use global schedule or a custom cron expression' },
+                    cronExpression: { type: 'STRING', description: 'Custom cron expression (required when scheduleMode is "custom")' }
+                },
+                required: ['containerName', 'enabled']
+            }
+        },
+        {
+            name: 'triggerContainerAutoUpdate',
+            description: 'Immediately checks and runs auto-updates (pull & redeploy if newer image is available) for one container or all enabled containers.',
+            parameters: {
+                type: 'OBJECT',
+                properties: {
+                    containerName: { type: 'STRING', description: 'Optional specific container name; omit to update all containers with auto-update enabled' },
+                    forceRecreate: { type: 'BOOLEAN', description: 'Force redeploy even if the image digest has not changed' }
+                }
             }
         }
     ]

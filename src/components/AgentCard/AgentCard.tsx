@@ -1,14 +1,14 @@
 import React, { memo, useCallback } from 'react';
 import './AgentCard.css';
-import { useAppContext } from '../../context/AppContext';
+import { useAppContext } from '../../context/useAppContext';
 import { getAgent } from '../../agents';
 import type { AgentId } from '../../types';
 
-const STATUS_LABELS: Record<string, string> = {
-    nav: 'Coordinates: Sector 001',
-    comms: 'Encryption: Level 5',
-    logistics: 'Resources: Optimized',
-    security: 'Grid: 402.11.B',
+const ROLE_SUMMARIES: Record<AgentId, string> = {
+    nav: 'Compute & Routing',
+    comms: 'Network & Web',
+    logistics: 'Storage & Data',
+    security: 'Security & Audit',
 };
 
 const AgentCard = memo(function AgentCard({ agentId }: { agentId: AgentId }) {
@@ -22,38 +22,52 @@ const AgentCard = memo(function AgentCard({ agentId }: { agentId: AgentId }) {
         dispatch({ type: 'SELECT_AGENT', payload: agentId });
     }, [dispatch, agentId]);
 
-    const handleClear = useCallback((e: React.MouseEvent) => {
-        e.stopPropagation();
-        dispatch({ type: 'CLEAR_CONVERSATION', payload: agentId });
-    }, [dispatch, agentId]);
+    const handleClear = useCallback(
+        (e: React.MouseEvent<HTMLButtonElement>) => {
+            e.stopPropagation();
+            dispatch({ type: 'CLEAR_CONVERSATION', payload: agentId });
+        },
+        [dispatch, agentId],
+    );
 
     return (
         <div
             id={`agent-card-${agentId}`}
-            className={`agent-card${isActive ? ' active' : ''}`}
-            style={{ '--agent-color': agent.color } as React.CSSProperties}
-            onClick={handleSelect}
-            role="button"
-            aria-pressed={isActive}
-            tabIndex={0}
-            onKeyDown={(e) => e.key === 'Enter' && handleSelect()}
+            className={`kai-agent-card${isActive ? ' is-active' : ''}`}
         >
-            {/* Pill header */}
-            <div className="agent-card-header">
-                <div className="agent-card-identity">
-                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{agent.icon}</span>
-                    <span className="agent-card-name">{agent.shortName}</span>
+            <button
+                type="button"
+                className="kai-agent-card-main"
+                onClick={handleSelect}
+                aria-pressed={isActive}
+            >
+                <div className="kai-agent-card-identity">
+                    <span className="material-symbols-outlined kai-agent-card-icon">
+                        {agent.icon}
+                    </span>
+                    <div className="kai-agent-card-titles">
+                        <span className="kai-agent-card-name">{agent.shortName}</span>
+                        <span className="kai-agent-card-role">{ROLE_SUMMARIES[agentId]}</span>
+                    </div>
                 </div>
-                <span className="agent-card-status-text">{status.toUpperCase()}</span>
-            </div>
+                <span className={`kai-badge ${status === 'processing' ? 'kai-badge-warning' : isActive ? 'kai-badge-accent' : ''}`}>
+                    {status}
+                </span>
+            </button>
 
-            {/* Sub-info strip */}
-            <div className="agent-card-sub">
-                <span>{STATUS_LABELS[agentId]}</span>
-                {msgCount > 0 && (
-                    <button className="agent-card-clear-btn" onClick={handleClear}>CLR</button>
-                )}
-            </div>
+            {msgCount > 0 && (
+                <div className="kai-agent-card-footer">
+                    <span className="kai-tabular">{msgCount} {msgCount === 1 ? 'message' : 'messages'}</span>
+                    <button
+                        type="button"
+                        className="kai-btn kai-btn-ghost kai-btn-xs"
+                        onClick={handleClear}
+                        aria-label={`Clear ${agent.shortName} conversation`}
+                    >
+                        Clear
+                    </button>
+                </div>
+            )}
         </div>
     );
 });

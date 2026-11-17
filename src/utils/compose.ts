@@ -30,6 +30,11 @@ export function specToCompose(spec: DockerCreateSpec): string {
 
     if (spec.name?.trim()) service.container_name = spec.name.trim().replace(/^\//, '');
 
+    const restartPolicy = spec.restartPolicy?.trim();
+    if (restartPolicy) {
+        service.restart = restartPolicy === 'no' ? quoted('no') : restartPolicy;
+    }
+
     const ports = (spec.ports || []).filter(p => p.host || p.container);
     if (ports.length) ports.sort((a, b) => a.container.localeCompare(b.container, undefined, { numeric: true }));
     if (ports.length) service.ports = ports.map(p => quoted(`${p.host}:${p.container}`));

@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -25,18 +25,65 @@ function execPromise(cmd, options = {}) {
   });
 }
 
+function execFilePromise(file, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(file, args, options, (error, stdout, stderr) => {
+      if (error) reject(error);
+      else resolve({ stdout, stderr });
+    });
+  });
+}
+
 app.get('/status', async (req, res) => {
   try {
     const gitExists = fs.existsSync('/app/.git');
     if (!gitExists) {
-        return res.json({ status: 'Awaiting Git', error: '.git folder not found in /app. Update impossible.' });
+      return res.json({
+        status: 'Awaiting Git',
+        error: '.git folder not found in /app. Update impossible.',
+        gitAvailable: false,
+        updateAvailable: false,
+        behindCount: 0,
+      });
     }
-    const gitCmd = `cd /app && git config --global --add safe.directory /app && git rev-parse --abbrev-ref HEAD && git log -1 --format="%h %s"`;
-    const { stdout } = await execPromise(gitCmd);
-    const [branch, lastCommit] = stdout.trim().split('\n');
-    res.json({ branch, lastCommit, status: 'Updater online', gitAvailable: true });
+
+    await execFilePromise('git', ['config', '--global', '--add', 'safe.directory', '/app'], { timeout: 5000 }).catch(() => {});
+
+    const { stdout: branchOut } = await execFilePromise('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: '/app', timeout: 5000 });
+    const { stdout: commitOut } = await execFilePromise('git', ['log', '-1', '--format=%h %s'], { cwd: '/app', timeout: 5000 });
+    const branch = branchOut.trim();
+    const lastCommit = commitOut.trim();
+    const targetBranch = (!branch || branch === 'HEAD') ? 'master' : branch;
+
+    // Fetch latest refs quietly with an 8s timeout; ignore network failures when offline
+    try {
+      await execFilePromise('git', ['fetch', '--quiet', 'origin'], { cwd: '/app', timeout: 8000 });
+    } catch { /* ignore network failure */ }
+
+    let behindCount = 0;
+    if (/^[a-zA-Z0-9._/-]+$/.test(targetBranch)) {
+      try {
+        const { stdout: countOut } = await execFilePromise(
+          'git',
+          ['rev-list', '--count', `HEAD..origin/${targetBranch}`],
+          { cwd: '/app', timeout: 5000 }
+        );
+        behindCount = parseInt(countOut.trim(), 10) || 0;
+      } catch {
+        behindCount = 0;
+      }
+    }
+
+    res.json({
+      branch,
+      lastCommit,
+      behindCount,
+      updateAvailable: behindCount > 0,
+      status: 'Updater online',
+      gitAvailable: true,
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message, gitAvailable: false });
+    res.status(500).json({ error: err.message, gitAvailable: false, updateAvailable: false, behindCount: 0 });
   }
 });
 

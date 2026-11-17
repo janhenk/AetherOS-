@@ -1,194 +1,194 @@
 .tactical-alerts-container {
-    background: rgba(10, 10, 20, 0.4);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(19, 200, 236, 0.2);
-    border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 20px;
-    overflow: hidden;
-    animation: slideInDown 0.5s ease-out;
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    box-shadow: var(--shadow-xs);
+    color: var(--text-primary);
 }
 
 .tactical-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    color: var(--lcars-primary);
-    margin-bottom: 12px;
-    opacity: 0.8;
+    justify-content: space-between;
+    gap: var(--space-2);
 }
 
-.alerts-list {
+.tactical-header.is-expanded {
+    padding-bottom: var(--space-3);
+    margin-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.tactical-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+}
+
+.tactical-header-icon {
+    color: var(--accent-primary);
+    font-size: 1.125rem;
+    flex-shrink: 0;
+}
+
+.tactical-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+.tactical-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
+}
+
+.tactical-alerts-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-2);
+    max-height: 360px;
+    overflow-y: auto;
+    padding-right: 2px;
 }
 
 .tactical-alert-item {
     display: flex;
-    gap: 12px;
-    padding: 12px;
-    border-radius: 6px;
-    position: relative;
-    border-left: 4px solid transparent;
-    background: rgba(0, 0, 0, 0.2);
-    transition: transform 0.2s ease;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-left: 3px solid var(--accent-primary);
+    transition:
+        background-color var(--duration-fast) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out);
 }
 
 .tactical-alert-item:hover {
-    transform: translateX(4px);
-    background: rgba(0, 0, 0, 0.3);
+    background-color: var(--bg-tertiary);
+    border-color: var(--border-color);
 }
 
 .tactical-alert-item.severity-high {
-    border-left-color: var(--lcars-secondary); /* Pink/Red for high alert */
-    background: rgba(168, 85, 247, 0.05);
+    border-left-color: var(--danger-color);
 }
 
 .tactical-alert-item.severity-medium {
-    border-left-color: #f59e0b; /* Orange */
+    border-left-color: var(--warning-color);
 }
 
 .tactical-alert-item.severity-low {
-    border-left-color: var(--lcars-primary); /* Cyan */
+    border-left-color: var(--info-color);
 }
 
-.alert-badge {
-    height: 28px;
+.tactical-alert-badge {
     width: 28px;
+    height: 28px;
     min-width: 28px;
-    border-radius: 50%;
-    display: flex;
+    border-radius: var(--radius-full);
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--lcars-text-dim);
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    margin-top: 1px;
 }
 
-.severity-high .alert-badge {
-    color: var(--lcars-secondary);
-    box-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+.tactical-alert-item.severity-high .tactical-alert-badge {
+    background-color: var(--danger-subtle);
+    color: var(--danger-color);
 }
 
-.alert-content {
+.tactical-alert-item.severity-medium .tactical-alert-badge {
+    background-color: var(--warning-subtle);
+    color: var(--warning-color);
+}
+
+.tactical-alert-item.severity-low .tactical-alert-badge {
+    background-color: var(--info-subtle);
+    color: var(--info-color);
+}
+
+.tactical-alert-content {
     flex: 1;
-}
-
-.alert-message {
-    font-size: 0.85rem;
-    font-weight: 500;
-    margin-bottom: 4px;
-    color: #fff;
-}
-
-.alert-suggestion {
-    font-size: 0.75rem;
-    color: var(--lcars-text-dim);
-    margin-bottom: 8px;
-    line-height: 1.4;
-}
-
-.execute-btn {
-    background: var(--lcars-primary);
-    color: #000;
-    border: none;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 0.65rem;
-    font-weight: 700;
-    cursor: pointer;
+    min-width: 0;
     display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.tactical-alert-meta {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    transition: opacity 0.2s;
+    gap: var(--space-2);
 }
 
-.severity-high .execute-btn {
-    background: var(--lcars-secondary);
+.tactical-alert-message {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.4;
+    word-break: break-word;
 }
 
-.execute-btn:hover {
-    opacity: 0.8;
+.tactical-alert-suggestion {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    line-height: 1.45;
+    word-break: break-word;
 }
 
-.dismiss-btn {
-    background: transparent;
-    border: none;
-    color: var(--lcars-text-dim);
-    cursor: pointer;
-    opacity: 0.4;
-    transition: opacity 0.2s;
-}
-
-.dismiss-btn:hover {
-    opacity: 1;
-}
-
-@keyframes slideInDown {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.clear-all-btn {
-    margin-left: auto;
-    background: transparent;
-    border: 1px solid rgba(19, 200, 236, 0.35);
-    color: var(--lcars-primary);
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s;
-}
-
-.clear-all-btn:hover {
-    background: var(--lcars-primary);
-    color: #000;
-}
-
-/* Long alert queues stay inside the panel instead of pushing the page down. */
-.alerts-list {
-    max-height: 340px;
-    overflow-y: auto;
-    padding-right: 4px;
-}
-
-.alerts-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.alerts-list::-webkit-scrollbar-thumb {
-    background: rgba(19, 200, 236, 0.3);
-    border-radius: 3px;
-}
-
-.dismiss-btn {
-    align-self: flex-start;
+.tactical-alert-actions {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+}
+
+.tactical-dismiss-btn {
+    min-width: 28px;
+    min-height: 28px;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 2px;
-    line-height: 1;
+    flex-shrink: 0;
+    padding: 0;
+    border-radius: var(--radius-xs);
+    border: 1px solid transparent;
+    background-color: transparent;
+    color: var(--text-secondary);
+    opacity: 1;
+    cursor: pointer;
+    transition:
+        background-color var(--duration-fast) var(--ease-out),
+        color var(--duration-fast) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out);
 }
 
-.execute-btn:disabled {
+.tactical-dismiss-btn:hover:not(:disabled) {
+    color: var(--text-primary);
+    background-color: var(--hover-bg);
+    border-color: var(--border-subtle);
+}
+
+.tactical-dismiss-btn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+}
+
+.tactical-dismiss-btn:disabled {
     opacity: 0.5;
-    cursor: progress;
-}
-
-.alert-error {
-    margin-top: 6px;
-    font-size: 0.7rem;
-    color: #f87171;
-    line-height: 1.4;
+    cursor: not-allowed;
 }

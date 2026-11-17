@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import CronManager from './CronManager';
 
 interface Props {
@@ -5,25 +6,64 @@ interface Props {
 }
 
 export default function CronManagerModal({ onClose }: Props) {
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [onClose]);
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-            <div
-                className="glass-panel rounded-2xl flex flex-col overflow-hidden border border-primary/20 shadow-2xl"
-                style={{ width: 680, maxHeight: '85vh' }}
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
-                    <div>
-                        <h2 className="text-sm font-bold text-white tracking-widest uppercase">Scheduled Protocols</h2>
-                        <p className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">Automated agent task scheduler</p>
+        <div
+            className="kai-modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Scheduled Jobs"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
+            <div className="kai-modal" style={{ maxWidth: '46rem' }}>
+                <div className="kai-modal-header">
+                    <div className="flex items-center gap-2.5">
+                        <span
+                            className="material-symbols-outlined text-xl"
+                            style={{ color: 'var(--accent-primary)' }}
+                        >
+                            schedule
+                        </span>
+                        <div>
+                            <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                                Scheduled Jobs
+                            </h2>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                Automated agent task scheduler
+                            </p>
+                        </div>
                     </div>
                     <button
+                        type="button"
                         onClick={onClose}
-                        className="material-symbols-outlined text-white/40 hover:text-white transition-colors text-xl"
-                    >close</button>
+                        className="kai-btn kai-btn-ghost kai-btn-icon"
+                        aria-label="Close scheduled jobs modal"
+                    >
+                        <span className="material-symbols-outlined text-lg">close</span>
+                    </button>
                 </div>
-                <div className="overflow-auto p-6 flex-1">
+
+                <div className="kai-modal-body">
                     <CronManager />
+                </div>
+
+                <div className="kai-modal-footer">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="kai-btn kai-btn-secondary kai-btn-sm"
+                    >
+                        Close
+                    </button>
                 </div>
             </div>
         </div>

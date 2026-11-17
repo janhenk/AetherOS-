@@ -32,7 +32,28 @@ export class CronManager {
     saveJobs(jobs) {
         const dir = path.dirname(this.jobsFile);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(this.jobsFile, JSON.stringify(jobs, null, 2));
+        const serialized = JSON.stringify(jobs, null, 2);
+        const tmpFile = `${this.jobsFile}.${process.pid}.${Date.now()}.tmp`;
+        try {
+            fs.writeFileSync(tmpFile, serialized, 'utf8');
+            fs.renameSync(tmpFile, this.jobsFile);
+        } catch {
+            try {
+                if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+            } catch { /* ignore cleanup error */ }
+            fs.writeFileSync(this.jobsFile, serialized, 'utf8');
+        }
+    }
+
+    updateJobStatus(id, patch) {
+        const jobs = this.loadJobs();
+        const index = jobs.findIndex(j => j.id === id);
+        if (index !== -1) {
+            jobs[index] = { ...jobs[index], ...patch };
+            this.saveJobs(jobs);
+            return jobs[index];
+        }
+        return null;
     }
 
     loadAndSchedule() {
@@ -51,6 +72,88 @@ export class CronManager {
         console.log(`[CRON] Scheduled ${this.activeJobs.size} active tasks.`);
     }
 
+    async executeJob(config) {
+        const startedAt = new Date().toISOString();
+        console.log(`[CRON] [${startedAt}] Executing Task: ${config.name} (Agent: ${config.agentId})`);
+        this.updateJobStatus(config.id, {
+            lastRunAt: startedAt,
+            lastStatus: 'running',
+            lastError: null,
+        });
+
+        try {
+            const settings = this.getSettings();
+            const currentAgents = typeof this.agents === 'function' ? this.agents() : this.agents;
+            const agent = currentAgents.find(a => a.id === config.agentId);
+
+            if (!agent) throw new Error(`Agent ${config.agentId} not found`);
+
+            const systemPrompt = settings.agentOverrides?.[agent.id]?.systemPrompt || agent.systemPrompt;
+
+            const history = await this.runAgentLoop(
+                config.agentId,
+                config.prompt,
+                systemPrompt,
+                [],
+                settings,
+                this.tools,
+                this.baseUrl,
+                this.internalToken
+            );
+
+            const agentMessages = Array.isArray(history) ? history.filter(m => m.role === 'agent') : [];
+            const lastMessage = agentMessages[agentMessages.length - 1]?.content || '';
+
+            if (lastMessage.startsWith('⚠ BACKGROUND AGENT ERROR:')) {
+                throw new Error(lastMessage.replace(/^⚠\s*BACKGROUND AGENT ERROR:\s*/, ''));
+            }
+
+            this.updateJobStatus(config.id, {
+                lastRunAt: startedAt,
+                lastStatus: 'success',
+                lastError: null,
+            });
+            console.log(`[CRON] [${new Date().toISOString()}] Task Completed: ${config.name}`);
+
+            return {
+                success: true,
+                jobId: config.id,
+                name: config.name,
+                lastRunAt: startedAt,
+                lastStatus: 'success',
+                lastError: null,
+                output: lastMessage,
+            };
+        } catch (err) {
+            this.updateJobStatus(config.id, {
+                lastRunAt: startedAt,
+                lastStatus: 'failed',
+                lastError: err.message,
+            });
+            console.error(`[CRON] [${new Date().toISOString()}] Task Failed: ${config.name} - ${err.message}`);
+
+            return {
+                success: false,
+                jobId: config.id,
+                name: config.name,
+                lastRunAt: startedAt,
+                lastStatus: 'failed',
+                lastError: err.message,
+            };
+        }
+    }
+
+    async runJobNow(id) {
+        const jobs = this.loadJobs();
+        const job = jobs.find(j => j.id === id);
+        if (!job) {
+            const err = new Error('Job not found');
+            err.statusCode = 404;
+            throw err;
+        }
+        return await this.executeJob(job);
+    }
+
     schedule(config) {
         if (!cron.validate(config.schedule)) {
             console.error(`[CRON] Invalid cron expression for task ${config.name}: ${config.schedule}`);
@@ -59,32 +162,7 @@ export class CronManager {
 
         try {
             const task = cron.schedule(config.schedule, async () => {
-                const now = new Date().toISOString();
-                console.log(`[CRON] [${now}] Executing Task: ${config.name} (Agent: ${config.agentId})`);
-                
-                try {
-                    const settings = this.getSettings();
-                    // Inject specific tool instructions if needed, but runAgentLoop handles standard tools
-                    // We need the latest agents/tools from the dependencies
-                    const currentAgents = this.agents(); // Assume a getter function if they change
-                    const agent = currentAgents.find(a => a.id === config.agentId);
-                    
-                    if (!agent) throw new Error(`Agent ${config.agentId} not found`);
-
-                    await this.runAgentLoop(
-                        config.agentId,
-                        config.prompt,
-                        agent.systemPrompt,
-                        [], // Clean history for each cron run
-                        settings,
-                        this.tools,
-                        this.baseUrl,
-                        this.internalToken
-                    );
-                    console.log(`[CRON] [${new Date().toISOString()}] Task Completed: ${config.name}`);
-                } catch (err) {
-                    console.error(`[CRON] [${new Date().toISOString()}] Task Failed: ${config.name} - ${err.message}`);
-                }
+                await this.executeJob(config);
             });
             this.activeJobs.set(config.id, task);
         } catch (e) {
@@ -103,14 +181,21 @@ export class CronManager {
         const jobs = this.loadJobs();
         const index = jobs.findIndex(j => j.id === updatedJob.id);
         if (index !== -1) {
-            // Stop old
             const oldTask = this.activeJobs.get(updatedJob.id);
             if (oldTask) oldTask.stop();
             this.activeJobs.delete(updatedJob.id);
 
-            jobs[index] = updatedJob;
+            const prev = jobs[index];
+            const merged = {
+                ...prev,
+                ...updatedJob,
+                lastRunAt: updatedJob.lastRunAt !== undefined ? updatedJob.lastRunAt : prev.lastRunAt,
+                lastStatus: updatedJob.lastStatus !== undefined ? updatedJob.lastStatus : prev.lastStatus,
+                lastError: updatedJob.lastError !== undefined ? updatedJob.lastError : prev.lastError,
+            };
+            jobs[index] = merged;
             this.saveJobs(jobs);
-            if (updatedJob.enabled) this.schedule(updatedJob);
+            if (merged.enabled) this.schedule(merged);
         }
     }
 
@@ -118,7 +203,7 @@ export class CronManager {
         const jobs = this.loadJobs();
         const filtered = jobs.filter(j => j.id !== id);
         this.saveJobs(filtered);
-        
+
         const task = this.activeJobs.get(id);
         if (task) task.stop();
         this.activeJobs.delete(id);

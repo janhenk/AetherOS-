@@ -1,6 +1,5 @@
-import { memo, useState, useMemo } from 'react';
+import { memo, useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useAppContext } from '../../context/AppContext';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -11,11 +10,13 @@ import {
     Tooltip,
     Legend,
     Filler,
-    type ChartOptions
+    type ChartOptions,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { useAppContext } from '../../context/useAppContext';
+import { useTheme } from '../../theme/useTheme';
+import type { DiskUsage } from '../../types';
 
-// Register Chart.js components
 ChartJS.register(
     CategoryScale,
     LinearScale,
@@ -24,252 +25,466 @@ ChartJS.register(
     Filler,
     Title,
     Tooltip,
-    Legend
+    Legend,
 );
+
+type TelemetryMetric = 'cpu' | 'ram' | 'storage';
+
+interface ChartThemePalette {
+    accent: string;
+    accentSubtle: string;
+    warning: string;
+    danger: string;
+    textPrimary: string;
+    textSecondary: string;
+    textMuted: string;
+    borderColor: string;
+    bgElevated: string;
+}
+
+function readThemePalette(): ChartThemePalette {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+        return {
+            accent: '#3B82F6',
+            accentSubtle: 'rgba(59, 130, 246, 0.14)',
+            warning: '#F59E0B',
+            danger: '#EF4444',
+            textPrimary: '#F3F4F6',
+            textSecondary: '#9CA3AF',
+            textMuted: '#6B7280',
+            borderColor: 'rgba(255, 255, 255, 0.08)',
+            bgElevated: '#12151B',
+        };
+    }
+
+    const styles = getComputedStyle(document.documentElement);
+    const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
+
+    return {
+        accent: read('--accent-primary', '#3B82F6'),
+        accentSubtle: read('--accent-subtle', 'rgba(59, 130, 246, 0.14)'),
+        warning: read('--warning-color', '#F59E0B'),
+        danger: read('--danger-color', '#EF4444'),
+        textPrimary: read('--text-primary', '#F3F4F6'),
+        textSecondary: read('--text-secondary', '#9CA3AF'),
+        textMuted: read('--text-muted', '#6B7280'),
+        borderColor: read('--border-color', 'rgba(255, 255, 255, 0.08)'),
+        bgElevated: read('--bg-elevated', '#12151B'),
+    };
+}
+
+function clampPercent(value: number): number {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(100, value));
+}
+
+function getThresholdColor(usedPercent: number): string {
+    if (usedPercent > 90) return 'var(--danger-color)';
+    if (usedPercent > 75) return 'var(--warning-color)';
+    return 'var(--accent-primary)';
+}
+
+function getThresholdBadgeClass(usedPercent: number): string {
+    if (usedPercent > 90) return 'kai-badge kai-badge-danger';
+    if (usedPercent > 75) return 'kai-badge kai-badge-warning';
+    return 'kai-badge kai-badge-accent';
+}
+
+function formatGigabytes(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0.0 GB';
+    return `${(bytes / (1024 ** 3)).toFixed(1)} GB`;
+}
 
 const VesselStatus = memo(function VesselStatus() {
     const { state } = useAppContext();
-    const [activeChart, setActiveChart] = useState<'cpu' | 'ram' | 'storage' | null>(null);
+    const { theme } = useTheme();
+    const [activeChart, setActiveChart] = useState<TelemetryMetric | null>(null);
+    const [palette, setPalette] = useState<ChartThemePalette>(() => readThemePalette());
+
+    useEffect(() => {
+        const rafId = window.requestAnimationFrame(() => {
+            setPalette(readThemePalette());
+        });
+        return () => window.cancelAnimationFrame(rafId);
+    }, [theme]);
+
+    useEffect(() => {
+        if (!activeChart) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setActiveChart(null);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [activeChart]);
+
     const ss = state.serverState;
+    const cpuUsed = clampPercent(ss ? ss.cpuLoad : 0);
+    const cpuIdle = clampPercent(100 - cpuUsed);
+    const ramUsed = clampPercent(ss ? ss.ramUsed : 0);
+    const ramFree = clampPercent(100 - ramUsed);
 
-    // Default to fully available if no state
-    const cpuAvail = ss ? 100 - ss.cpuLoad : 100;
-    const ramAvail = ss ? 100 - ss.ramUsed : 100;
-    
-    const storageInfo = useMemo(() => {
-        if (!ss || ss.storageUsed === undefined) return { aggregate: 100, disks: [] };
-        
-        // Handle legacy number format (0-100% used)
+    const storageInfo = useMemo<{ usedPercent: number; disks: DiskUsage[] }>(() => {
+        if (!ss || ss.storageUsed === undefined) {
+            return { usedPercent: 0, disks: [] };
+        }
+
         if (typeof ss.storageUsed === 'number') {
-            return { aggregate: 100 - ss.storageUsed, disks: [] };
+            return { usedPercent: clampPercent(ss.storageUsed), disks: [] };
         }
 
-        // Handle new structured object format
-        if (ss.storageUsed && typeof ss.storageUsed === 'object') {
-            const usedPercent = Number(ss.storageUsed.aggregatePercent);
+        if (typeof ss.storageUsed === 'object' && ss.storageUsed !== null) {
+            const usedPercent = clampPercent(Number(ss.storageUsed.aggregatePercent));
             const disks = Array.isArray(ss.storageUsed.disks) ? ss.storageUsed.disks : [];
-            
-            return { 
-                aggregate: isNaN(usedPercent) ? 100 : 100 - usedPercent, 
-                disks 
-            };
+            return { usedPercent, disks };
         }
 
-        return { aggregate: 100, disks: [] };
+        return { usedPercent: 0, disks: [] };
     }, [ss]);
 
-    const storageAvail = storageInfo.aggregate;
-
     const chartData = useMemo(() => {
-        if (!activeChart) return null;
-        
-        // Data points (Availability %: 100 - Load)
-        const data = state.statsHistory.map(p => activeChart === 'cpu' ? (100 - p.cpu) : (100 - p.ram));
-        
-        // Labels (Timeframe: 0 to 600s ago)
-        const labels = state.statsHistory.map((_, i) => `${state.statsHistory.length - 1 - i}s`).reverse();
-        
-        const color = activeChart === 'cpu' ? '#bbb891' : '#d6a89c'; // Gold for CPU, Rose for RAM
-        const secondaryColor = activeChart === 'cpu' ? 'rgba(187, 184, 145, 0.1)' : 'rgba(214, 168, 156, 0.1)';
+        if (!activeChart || activeChart === 'storage') return null;
+
+        const data = state.statsHistory.map((point) =>
+            clampPercent(activeChart === 'cpu' ? point.cpu : point.ram),
+        );
+        const labels = state.statsHistory
+            .map((_, idx) => `${state.statsHistory.length - 1 - idx}s`)
+            .reverse();
 
         return {
             labels,
             datasets: [
                 {
-                    label: activeChart === 'cpu' ? 'CPU Availability' : 'RAM Availability',
+                    label: activeChart === 'cpu' ? 'CPU Load (%)' : 'Memory Usage (%)',
                     data,
-                    borderColor: color,
-                    backgroundColor: secondaryColor,
-                    tension: 0.1, // Reduced smoothing for precision
+                    borderColor: palette.accent,
+                    backgroundColor: palette.accentSubtle,
+                    tension: 0.2,
                     fill: true,
                     pointRadius: 0,
+                    pointHoverRadius: 4,
                     borderWidth: 2,
                 },
             ],
         };
-    }, [state.statsHistory, activeChart]);
+    }, [state.statsHistory, activeChart, palette]);
 
-    const chartOptions: ChartOptions<'line'> = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                mode: 'index',
-                intersect: false,
-                backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                titleColor: activeChart === 'cpu' ? '#bbb891' : '#d6a89c',
-                bodyColor: '#fff',
-                borderColor: activeChart === 'cpu' ? 'rgba(187, 184, 145, 0.3)' : 'rgba(214, 168, 156, 0.3)',
-                borderWidth: 1,
+    const chartOptions = useMemo<ChartOptions<'line'>>(
+        () => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 150 },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: palette.bgElevated,
+                    titleColor: palette.textPrimary,
+                    bodyColor: palette.textSecondary,
+                    borderColor: palette.borderColor,
+                    borderWidth: 1,
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y ?? 0).toFixed(1)}%`,
+                    },
+                },
             },
-        },
-        scales: {
-            x: {
-                display: true,
-                grid: { display: false },
-                ticks: { 
-                    color: 'rgba(187, 184, 145, 0.5)', 
-                    maxRotation: 0, 
-                    autoSkip: true, 
-                    maxTicksLimit: 8,
-                    font: { size: 9 }
-                }
+            scales: {
+                x: {
+                    display: true,
+                    grid: { display: false },
+                    border: { color: palette.borderColor },
+                    ticks: {
+                        color: palette.textMuted,
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 8,
+                        font: { size: 10 },
+                    },
+                },
+                y: {
+                    display: true,
+                    min: 0,
+                    max: 100,
+                    border: { color: palette.borderColor },
+                    grid: { color: palette.borderColor },
+                    ticks: {
+                        color: palette.textMuted,
+                        callback: (val) => `${val}%`,
+                        font: { size: 10 },
+                    },
+                },
             },
-            y: {
-                display: true,
-                min: 0,
-                max: 100,
-                grid: { color: 'rgba(187, 184, 145, 0.1)' },
-                ticks: { color: 'rgba(187, 184, 145, 0.5)', callback: (val) => `${val}%`, font: { size: 9 } }
-            },
-        },
-    };
+        }),
+        [palette],
+    );
+
+    const modalTitle =
+        activeChart === 'cpu'
+            ? 'CPU Load History'
+            : activeChart === 'ram'
+              ? 'Memory Usage History'
+              : 'Disk Storage Breakdown';
+
+    const activeValue =
+        activeChart === 'cpu' ? cpuUsed : activeChart === 'ram' ? ramUsed : storageInfo.usedPercent;
 
     const modalContent = activeChart && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
-            <div className="glass-panel w-full max-w-3xl rounded-2xl p-6 border border-primary/20 shadow-2xl animate-in zoom-in-95 duration-300">
-                <div className="flex justify-between items-center mb-6">
+        <div
+            className="kai-modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label={modalTitle}
+            onClick={(e) => {
+                if (e.target === e.currentTarget) setActiveChart(null);
+            }}
+        >
+            <div className="kai-modal" style={{ maxWidth: '48rem' }}>
+                <div className="kai-modal-header">
                     <div className="flex items-center gap-3">
-                        <div className={`h-3 w-3 rounded-full ${activeChart === 'cpu' ? 'bg-primary' : 'bg-secondary'} animate-pulse`}></div>
-                        <h2 className="text-lg font-bold uppercase tracking-widest text-white/90">
-                            {activeChart === 'cpu' ? 'Main Warp Core (CPU)' : 
-                             activeChart === 'ram' ? 'Structural Shields (RAM)' : 
-                             'Hull Integrity (Storage)'} Telemetry
-                        </h2>
+                        <span
+                            className="material-symbols-outlined text-xl"
+                            style={{ color: getThresholdColor(activeValue) }}
+                        >
+                            {activeChart === 'cpu'
+                                ? 'memory'
+                                : activeChart === 'ram'
+                                  ? 'data_usage'
+                                  : 'hard_drive'}
+                        </span>
+                        <div>
+                            <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                                {modalTitle}
+                            </h2>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                {activeChart === 'storage'
+                                    ? `${storageInfo.disks.length} mounted ${storageInfo.disks.length === 1 ? 'volume' : 'volumes'}`
+                                    : `${state.statsHistory.length} samples in sliding telemetry buffer`}
+                            </p>
+                        </div>
                     </div>
-                    <button 
-                        onClick={() => setActiveChart(null)}
-                        className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
-                    >
-                        <span className="material-symbols-outlined text-lg">close</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <span className={`${getThresholdBadgeClass(activeValue)} kai-tabular`}>
+                            {activeValue.toFixed(1)}% used
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setActiveChart(null)}
+                            className="kai-btn kai-btn-ghost kai-btn-icon"
+                            aria-label="Close telemetry modal"
+                        >
+                            <span className="material-symbols-outlined text-lg">close</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div className="h-[400px] w-full bg-black/40 rounded-xl p-4 border border-white/5 shadow-inner overflow-y-auto">
+                <div className="kai-modal-body">
                     {activeChart === 'storage' ? (
-                        <div className="space-y-6 p-2">
+                        <div className="flex flex-col gap-3">
                             {storageInfo.disks.length > 0 ? (
-                                storageInfo.disks.map((disk, i) => (
-                                    <div key={i} className="space-y-2 animate-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: `${i * 50}ms` }}>
-                                        <div className="flex justify-between items-end">
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-primary/60 font-bold uppercase tracking-tighter">{disk.device}</span>
-                                                <span className="text-sm font-bold text-white/90">{disk.mount}</span>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-xs font-mono text-primary">{disk.percent}% Used</div>
-                                                <div className="text-[10px] text-white/30 uppercase">
-                                                    {(disk.used / (1024**3)).toFixed(1)}GB / {(disk.total / (1024**3)).toFixed(1)}GB
+                                storageInfo.disks.map((disk, idx) => {
+                                    const diskPercent = clampPercent(disk.percent);
+                                    return (
+                                        <div
+                                            key={`${disk.device}-${disk.mount}-${idx}`}
+                                            className="kai-surface-subtle flex flex-col gap-2"
+                                        >
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="min-w-0">
+                                                    <div
+                                                        className="text-sm font-semibold truncate"
+                                                        style={{ color: 'var(--text-primary)' }}
+                                                    >
+                                                        {disk.mount}
+                                                    </div>
+                                                    <div
+                                                        className="kai-mono text-xs truncate"
+                                                        style={{ color: 'var(--text-muted)' }}
+                                                    >
+                                                        {disk.device}
+                                                    </div>
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <span className={`${getThresholdBadgeClass(diskPercent)} kai-tabular`}>
+                                                        {diskPercent.toFixed(1)}%
+                                                    </span>
+                                                    <div
+                                                        className="kai-mono kai-tabular text-xs mt-1"
+                                                        style={{ color: 'var(--text-secondary)' }}
+                                                    >
+                                                        {formatGigabytes(disk.used)} / {formatGigabytes(disk.total)}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden ring-1 ring-white/5">
                                             <div
-                                                className={`h-full rounded-full transition-all duration-1000 ease-out ${disk.percent > 90 ? 'bg-red-500 neon-aura-red' : disk.percent > 70 ? 'bg-orange-500' : 'bg-primary neon-aura-primary'}`}
-                                                style={{ width: `${disk.percent}%` }}
-                                            ></div>
+                                                className="h-2 w-full rounded-full overflow-hidden"
+                                                style={{ backgroundColor: 'var(--progress-bg)' }}
+                                            >
+                                                <div
+                                                    className="h-full rounded-full transition-all duration-300"
+                                                    style={{
+                                                        width: `${diskPercent}%`,
+                                                        backgroundColor: getThresholdColor(diskPercent),
+                                                    }}
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             ) : (
-                                <div className="flex items-center justify-center h-full text-white/30 uppercase tracking-widest text-xs">
-                                    No detailed telemetry available for sub-sectors
+                                <div className="kai-empty-state">
+                                    No per-mount disk telemetry is currently available.
                                 </div>
                             )}
                         </div>
                     ) : (
-                        chartData && <Line options={chartOptions} data={chartData} />
+                        <div
+                            className="rounded-lg p-4 border"
+                            style={{
+                                height: '22rem',
+                                backgroundColor: 'var(--bg-secondary)',
+                                borderColor: 'var(--border-subtle)',
+                            }}
+                        >
+                            {chartData && state.statsHistory.length > 0 ? (
+                                <Line options={chartOptions} data={chartData} />
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                                    Collecting telemetry samples...
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
 
-                <div className="mt-6 flex justify-between items-center text-[10px] text-white/40 uppercase tracking-widest font-bold">
-                    <div>
-                        {activeChart === 'storage' 
-                            ? `Total Secondary Sectors: ${storageInfo.disks.length}` 
-                            : 'Telemetry Window: 10m Sliding Buffer (Real-time)'}
-                    </div>
-                    <div className="flex gap-4">
-                        <div className="flex items-center gap-1.5">
-                            <div className={`h-1.5 w-1.5 rounded-full ${activeChart === 'storage' ? 'bg-primary' : 'bg-primary'}`}></div> 
-                            {activeChart === 'storage' ? 'USED CAPACITY' : 'AVAILABLE'}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <div className="h-1.5 w-1.5 rounded-full bg-white/10"></div> TOTAL CAPACITY
-                        </div>
-                    </div>
+                <div className="kai-modal-footer justify-between">
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {activeChart === 'storage'
+                            ? `Aggregate capacity used: ${storageInfo.usedPercent.toFixed(1)}%`
+                            : 'Thresholds: normal < 75%, warning > 75%, critical > 90%'}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setActiveChart(null)}
+                        className="kai-btn kai-btn-secondary kai-btn-sm"
+                    >
+                        Close
+                    </button>
                 </div>
             </div>
         </div>
     );
 
+    const cards: {
+        key: TelemetryMetric;
+        title: string;
+        icon: string;
+        usedPercent: number;
+        subtitle: string;
+    }[] = [
+        {
+            key: 'cpu',
+            title: 'CPU Load',
+            icon: 'memory',
+            usedPercent: cpuUsed,
+            subtitle: `${cpuIdle.toFixed(1)}% idle`,
+        },
+        {
+            key: 'ram',
+            title: 'Memory Usage',
+            icon: 'data_usage',
+            usedPercent: ramUsed,
+            subtitle: `${ramFree.toFixed(1)}% free`,
+        },
+        {
+            key: 'storage',
+            title: 'Disk Storage',
+            icon: 'hard_drive',
+            usedPercent: storageInfo.usedPercent,
+            subtitle:
+                storageInfo.disks.length > 0
+                    ? `${storageInfo.disks.length} ${storageInfo.disks.length === 1 ? 'disk' : 'disks'}`
+                    : `${clampPercent(100 - storageInfo.usedPercent).toFixed(1)}% free`,
+        },
+    ];
+
     return (
-        <div className="glass-panel rounded-xl p-5 relative overflow-hidden">
-            <div className="mb-4 flex items-center gap-3">
-                <div className="h-2 w-2 rounded-full bg-primary neon-aura-primary"></div>
-                <h3 className="text-xs font-bold uppercase tracking-widest text-primary/80">Vessel Status</h3>
+        <section className="kai-surface" aria-label="System Telemetry">
+            <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                    <span
+                        className="material-symbols-outlined text-lg"
+                        style={{ color: 'var(--accent-primary)' }}
+                    >
+                        monitoring
+                    </span>
+                    <h2 className="text-sm font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                        System Telemetry
+                    </h2>
+                </div>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Click any metric for details
+                </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                {/* CPU Idle */}
-                <div 
-                    className="space-y-2 cursor-pointer group hover:opacity-80 transition-opacity"
-                    onClick={() => setActiveChart('cpu')}
-                >
-                    <div className="flex justify-between text-xs">
-                        <span className="text-white/70 group-hover:text-primary transition-colors">CPU Idle (Warp Core)</span>
-                        <span className="text-primary font-mono">{cpuAvail.toFixed(1)}%</span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden ring-1 ring-white/5">
-                        <div
-                            className="h-full rounded-full bg-gradient-to-r from-primary to-secondary neon-aura-primary transition-all duration-500 ease-out"
-                            style={{ width: `${Math.max(0, Math.min(100, cpuAvail))}%` }}
-                        ></div>
-                    </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {cards.map((card) => {
+                    const barColor = getThresholdColor(card.usedPercent);
+                    return (
+                        <button
+                            key={card.key}
+                            type="button"
+                            onClick={() => setActiveChart(card.key)}
+                            className="kai-surface-subtle text-left flex flex-col gap-2.5 cursor-pointer transition-colors hover:border-[var(--border-strong)] focus:outline-none focus-visible:ring-2"
+                            style={{ borderColor: 'var(--border-subtle)' }}
+                        >
+                            <div className="flex items-center justify-between gap-2">
+                                <span
+                                    className="inline-flex items-center gap-1.5 text-xs font-medium"
+                                    style={{ color: 'var(--text-secondary)' }}
+                                >
+                                    <span className="material-symbols-outlined text-base" style={{ color: barColor }}>
+                                        {card.icon}
+                                    </span>
+                                    {card.title}
+                                </span>
+                                <span
+                                    className="kai-mono kai-tabular text-sm font-semibold"
+                                    style={{ color: 'var(--text-primary)' }}
+                                >
+                                    {card.usedPercent.toFixed(1)}%
+                                </span>
+                            </div>
 
-                {/* Storage Avail */}
-                <div 
-                    className="space-y-2 cursor-pointer group hover:opacity-80 transition-opacity"
-                    onClick={() => setActiveChart('storage')}
-                >
-                    <div className="flex justify-between text-xs">
-                        <span className="text-white/70 group-hover:text-primary transition-colors">Storage Free (Hull)</span>
-                        <span className="text-primary font-mono">{storageAvail.toFixed(1)}%</span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden ring-1 ring-white/5">
-                        <div
-                            className="h-full rounded-full bg-primary neon-aura-primary transition-all duration-500 ease-out"
-                            style={{ width: `${Math.max(0, Math.min(100, storageAvail))}%` }}
-                        ></div>
-                    </div>
-                </div>
+                            <div
+                                className="h-2 w-full rounded-full overflow-hidden"
+                                style={{ backgroundColor: 'var(--progress-bg)' }}
+                            >
+                                <div
+                                    className="h-full rounded-full transition-all duration-300"
+                                    style={{
+                                        width: `${card.usedPercent}%`,
+                                        backgroundColor: barColor,
+                                    }}
+                                />
+                            </div>
 
-                {/* RAM Avail */}
-                <div 
-                    className="space-y-2 cursor-pointer group hover:opacity-80 transition-opacity"
-                    onClick={() => setActiveChart('ram')}
-                >
-                    <div className="flex justify-between text-xs">
-                        <span className="text-white/70 group-hover:text-secondary transition-colors">RAM Avail. (Shields)</span>
-                        <span className="text-secondary font-mono">{ramAvail.toFixed(1)}%</span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden ring-1 ring-white/5">
-                        <div
-                            className="h-full rounded-full bg-secondary neon-aura-secondary transition-all duration-500 ease-out"
-                            style={{ width: `${Math.max(0, Math.min(100, ramAvail))}%` }}
-                        ></div>
-                    </div>
-                </div>
+                            <div className="flex items-center justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
+                                <span className="kai-tabular">{card.subtitle}</span>
+                                <span className="inline-flex items-center gap-0.5">
+                                    Inspect
+                                    <span className="material-symbols-outlined text-xs">chevron_right</span>
+                                </span>
+                            </div>
+                        </button>
+                    );
+                })}
             </div>
 
-            {/* Visual Header Decoration */}
-            <div className="absolute top-0 right-0 w-32 h-1 bg-gradient-to-l from-primary/30 to-transparent"></div>
-            <div className="absolute bottom-0 left-0 w-32 h-1 bg-gradient-to-r from-secondary/30 to-transparent"></div>
-
-            {/* Optimization Overlay (Chart Modal) - Rendered via Portal */}
             {activeChart && createPortal(modalContent, document.body)}
-        </div>
+        </section>
     );
 });
 

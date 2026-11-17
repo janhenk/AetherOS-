@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../utils/api';
 
 interface AdvancedDeploymentModalProps {
@@ -7,18 +7,24 @@ interface AdvancedDeploymentModalProps {
     onDeployed: () => void;
 }
 
-export default function AdvancedDeploymentModal({ isOpen, onClose, onDeployed }: AdvancedDeploymentModalProps) {
+function AdvancedDeploymentForm({ onClose, onDeployed }: Omit<AdvancedDeploymentModalProps, 'isOpen'>) {
     const [projectName, setProjectName] = useState('');
     const [composeData, setComposeData] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    if (!isOpen) return null;
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!projectName || !composeData) {
-            setError('Project Name and Compose YAML are required.');
+        if (!projectName.trim() || !composeData.trim()) {
+            setError('Project name and Compose YAML are required.');
             return;
         }
 
@@ -28,81 +34,128 @@ export default function AdvancedDeploymentModal({ isOpen, onClose, onDeployed }:
             const response = await apiFetch('/api/docker/compose-deploy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectName, composeData }),
+                body: JSON.stringify({ projectName: projectName.trim(), composeData }),
             });
 
             if (!response.ok) {
                 const contentType = response.headers.get('content-type');
                 if (contentType && contentType.includes('application/json')) {
-                    const data = await response.json();
-                    throw new Error(data.error || 'Deployment failed');
-                } else {
-                    const text = await response.text();
-                    throw new Error(`Server Error (${response.status}): ${text.slice(0, 100)}...`);
+                    const data = (await response.json()) as { error?: string };
+                    throw new Error(data.error || 'Deployment failed.');
                 }
+                const text = await response.text();
+                throw new Error(`Server error (${response.status}): ${text.slice(0, 120)}`);
             }
 
             onDeployed();
             onClose();
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Deployment failed.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-background-dark/80 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative z-10 w-full max-w-3xl bg-slate-900 border border-primary/20 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="bg-primary/10 border-b border-primary/20 p-4 flex items-center justify-between pointer-events-none neon-aura-primary">
-                    <h2 className="text-xl font-bold text-white tracking-widest uppercase">
-                        Advanced Compose Deployment
-                    </h2>
-                    <span className="material-symbols-outlined text-primary text-2xl">layers</span>
+        <div
+            className="kai-modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="advanced-deploy-title"
+            onClick={onClose}
+        >
+            <div
+                className="kai-modal max-w-3xl w-full"
+                style={{ maxHeight: '90vh' }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="kai-modal-header">
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-[22px]" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
+                            layers
+                        </span>
+                        <div>
+                            <h2 id="advanced-deploy-title" className="text-base font-semibold">
+                                Deploy Compose Stack
+                            </h2>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                Provision a multi-service Docker Compose stack
+                            </p>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        className="kai-btn kai-btn-ghost kai-btn-sm kai-btn-icon"
+                        onClick={onClose}
+                        aria-label="Close modal"
+                        title="Close"
+                    >
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+                    </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex flex-col gap-6">
+                <form id="advanced-compose-form" onSubmit={handleSubmit} className="kai-modal-body flex flex-col gap-4 overflow-y-auto">
                     {error && (
-                        <div className="bg-secondary/10 border border-secondary/40 p-3 rounded text-secondary text-xs font-mono">
-                            ERROR: {error}
+                        <div className="kai-alert kai-alert-error text-xs" role="alert">
+                            {error}
                         </div>
                     )}
 
-                    <div>
-                        <label className="block text-[10px] text-slate-400 uppercase tracking-widest mb-1 text-primary">Project Name ◈</label>
+                    <div className="kai-field">
+                        <label htmlFor="compose-project-name" className="kai-label">
+                            Project Name
+                        </label>
                         <input
+                            id="compose-project-name"
                             type="text"
                             value={projectName}
-                            onChange={e => setProjectName(e.target.value)}
-                            className="w-full bg-black/40 border border-primary/20 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-primary font-mono placeholder-slate-600"
-                            placeholder="e.g. microservices-stack"
+                            onChange={(e) => setProjectName(e.target.value)}
+                            className="kai-input kai-mono"
+                            placeholder="e.g. monitoring-stack"
                             required
                         />
-                        <p className="text-[9px] text-slate-500 mt-1 uppercase tracking-wider">Unique identifier for this stack cluster.</p>
+                        <p className="kai-help">Unique identifier for this Compose project.</p>
                     </div>
 
-                    <div className="flex-1 min-h-[300px] flex flex-col">
-                        <label className="block text-[10px] text-slate-400 uppercase tracking-widest mb-1 text-primary">Docker Compose YAML (Manifest) ◈</label>
+                    <div className="kai-field flex-1 flex flex-col">
+                        <label htmlFor="compose-yaml-input" className="kai-label">
+                            Docker Compose YAML
+                        </label>
                         <textarea
+                            id="compose-yaml-input"
                             value={composeData}
-                            onChange={e => setComposeData(e.target.value)}
-                            className="flex-1 w-full bg-black/60 border border-primary/20 rounded p-4 text-xs text-emerald-400 focus:outline-none focus:border-primary font-mono resize-none leading-relaxed"
-                            placeholder="services:&#10;  app:&#10;    image: nginx:latest&#10;    ports:&#10;      - '8080:80'"
+                            onChange={(e) => setComposeData(e.target.value)}
+                            className="kai-textarea kai-mono min-h-[280px] text-xs leading-relaxed"
+                            placeholder={"services:\n  app:\n    image: nginx:latest\n    restart: unless-stopped\n    ports:\n      - \"8080:80\""}
                             spellCheck={false}
                             required
                         />
                     </div>
-
-                    <div className="flex justify-end gap-4 mt-4 pt-4 border-t border-primary/20">
-                        <button type="button" onClick={onClose} className="px-5 py-2 rounded-lg border border-slate-600 text-slate-300 font-bold uppercase tracking-widest text-xs hover:bg-slate-800 transition-colors">Abort</button>
-                        <button type="submit" disabled={isSubmitting} className="px-8 py-2 rounded-lg bg-primary/20 border border-primary/50 text-white font-bold uppercase tracking-widest text-xs hover:bg-primary transition-colors flex items-center gap-2">
-                            {isSubmitting ? <span className="material-symbols-outlined animate-spin text-sm">sync</span> : null}
-                            Initialize Stack Deployment ◈
-                        </button>
-                    </div>
                 </form>
+
+                <div className="kai-modal-footer">
+                    <button type="button" onClick={onClose} className="kai-btn kai-btn-secondary">
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        form="advanced-compose-form"
+                        disabled={isSubmitting}
+                        className="kai-btn kai-btn-primary"
+                    >
+                        {isSubmitting && (
+                            <span className="material-symbols-outlined animate-spin text-[16px]" aria-hidden="true">sync</span>
+                        )}
+                        <span>{isSubmitting ? 'Deploying...' : 'Deploy Stack'}</span>
+                    </button>
+                </div>
             </div>
         </div>
     );
+}
+
+export default function AdvancedDeploymentModal({ isOpen, onClose, onDeployed }: AdvancedDeploymentModalProps) {
+    if (!isOpen) return null;
+    return <AdvancedDeploymentForm onClose={onClose} onDeployed={onDeployed} />;
 }
