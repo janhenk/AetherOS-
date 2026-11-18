@@ -168,6 +168,7 @@ export default function SectorView() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'running' | 'stopped'>('all');
     const [confirmPrune, setConfirmPrune] = useState(false);
+    const [confirmHostPower, setConfirmHostPower] = useState<'reboot' | 'shutdown' | null>(null);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const [quickFeedback, setQuickFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
     const [containerFeedback, setContainerFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
@@ -268,6 +269,34 @@ export default function SectorView() {
             setQuickFeedback({
                 kind: 'error',
                 text: err instanceof Error ? err.message : 'Failed to prune unused images.',
+            });
+        } finally {
+            setIsProcessing(null);
+        }
+    };
+
+    const handleHostPower = async (action: 'reboot' | 'shutdown') => {
+        setIsProcessing(`host-${action}`);
+        setConfirmHostPower(null);
+        setQuickFeedback(null);
+        try {
+            const res = await apiFetch('/api/system/host-power', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, confirm: true }),
+            });
+            const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+            if (!res.ok || data.error) {
+                throw new Error(data.error || `Host ${action} failed (${res.status})`);
+            }
+            setQuickFeedback({
+                kind: 'success',
+                text: data.message || `Host ${action} dispatched. This console will go offline shortly.`,
+            });
+        } catch (err: unknown) {
+            setQuickFeedback({
+                kind: 'error',
+                text: err instanceof Error ? err.message : `Failed to ${action} the host.`,
             });
         } finally {
             setIsProcessing(null);
@@ -648,6 +677,82 @@ export default function SectorView() {
                         </span>
                         <span>Network Topology</span>
                     </button>
+
+                    {confirmHostPower === 'reboot' ? (
+                        <div
+                            className="flex items-center gap-2 p-1 rounded-md"
+                            style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--warning-color)' }}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => void handleHostPower('reboot')}
+                                className="kai-btn kai-btn-danger kai-btn-sm flex-1"
+                            >
+                                Confirm Reboot
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmHostPower(null)}
+                                className="kai-btn kai-btn-ghost kai-btn-sm"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setConfirmHostPower('reboot')}
+                            disabled={isProcessing === 'host-reboot' || isProcessing === 'host-shutdown'}
+                            className="kai-btn kai-btn-secondary justify-start"
+                        >
+                            <span
+                                className={`material-symbols-outlined text-[18px] ${isProcessing === 'host-reboot' ? 'animate-spin' : ''}`}
+                                style={{ color: 'var(--warning-color)' }}
+                                aria-hidden="true"
+                            >
+                                {isProcessing === 'host-reboot' ? 'sync' : 'restart_alt'}
+                            </span>
+                            <span>{isProcessing === 'host-reboot' ? 'Rebooting Host...' : 'Reboot Host'}</span>
+                        </button>
+                    )}
+
+                    {confirmHostPower === 'shutdown' ? (
+                        <div
+                            className="flex items-center gap-2 p-1 rounded-md"
+                            style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--danger-color)' }}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => void handleHostPower('shutdown')}
+                                className="kai-btn kai-btn-danger kai-btn-sm flex-1"
+                            >
+                                Confirm Shutdown
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmHostPower(null)}
+                                className="kai-btn kai-btn-ghost kai-btn-sm"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setConfirmHostPower('shutdown')}
+                            disabled={isProcessing === 'host-reboot' || isProcessing === 'host-shutdown'}
+                            className="kai-btn kai-btn-secondary justify-start"
+                        >
+                            <span
+                                className={`material-symbols-outlined text-[18px] ${isProcessing === 'host-shutdown' ? 'animate-spin' : ''}`}
+                                style={{ color: 'var(--danger-color)' }}
+                                aria-hidden="true"
+                            >
+                                {isProcessing === 'host-shutdown' ? 'sync' : 'power_settings_new'}
+                            </span>
+                            <span>{isProcessing === 'host-shutdown' ? 'Shutting Down Host...' : 'Shutdown Host'}</span>
+                        </button>
+                    )}
 
                     {!confirmPrune ? (
                         <button

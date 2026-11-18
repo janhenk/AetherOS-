@@ -2492,6 +2492,175 @@ app.post('/api/system/host-update', async (req, res) => {
     }
 });
 
+// --- Host Power Control (reboot / shutdown) ---
+const IN_CONTAINER = (() => {
+    try {
+        if (fs.existsSync('/.dockerenv')) return true;
+        const cgroup = fs.readFileSync('/proc/1/cgroup', 'utf8');
+        return /docker|containerd|kubepods/i.test(cgroup);
+    } catch { return false; }
+})();
+
+const HOST_POWER_ACTIONS = {
+    reboot: {
+        label: 'reboot',
+        systemctl: 'reboot',
+        shutdownFlag: '-r',
+        winArgs: ['/r', '/t', '0', '/f'],
+    },
+    shutdown: {
+        label: 'shutdown',
+        systemctl: 'poweroff',
+        shutdownFlag: '-h',
+        winArgs: ['/s', '/t', '0', '/f'],
+    },
+};
+
+function runSshHostPower(settings, command) {
+    return new Promise((resolve, reject) => {
+        const sshClient = new Client();
+        let settled = false;
+        let stdout = '';
+        let stderr = '';
+
+        const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try { sshClient.end(); } catch { /* already closed */ }
+            resolve(result);
+        };
+        const fail = (err) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try { sshClient.end(); } catch { /* already closed */ }
+            reject(err);
+        };
+
+        // The host drops the SSH connection while powering down, so a lost
+        // connection after dispatching the command counts as success.
+        const timer = setTimeout(() => {
+            finish({ dispatched: true, stdout, stderr: stderr || 'Connection closed by host.' });
+        }, 12000);
+
+        sshClient
+            .on('ready', () => {
+                sshClient.exec(command, (err, stream) => {
+                    if (err) return fail(err);
+                    stream
+                        .on('close', (code) => {
+                            finish({ dispatched: true, code, stdout, stderr });
+                        })
+                        .on('data', (data) => { stdout += data; })
+                        .stderr.on('data', (data) => { stderr += data; });
+                });
+            })
+            .on('error', (err) => {
+                if (settled) return;
+                fail(new Error(`SSH connection error: ${err.message}`));
+            })
+            .connect({
+                host: settings.sshHost,
+                port: settings.sshPort || 22,
+                username: settings.sshUsername,
+                readyTimeout: 10000,
+                ...(settings.sshPassword && { password: settings.sshPassword }),
+            });
+    });
+}
+
+async function triggerHostPower(action) {
+    const spec = HOST_POWER_ACTIONS[action];
+    if (!spec) {
+        const err = new Error(`Unsupported host power action '${action}'. Use 'reboot' or 'shutdown'.`);
+        err.statusCode = 400;
+        throw err;
+    }
+
+    const settings = getSettings();
+
+    // 1. Remote host over SSH (preferred when the dashboard runs in a container).
+    if (settings.sshHost && settings.sshUsername) {
+        const remoteCmd =
+            `sudo -n shutdown ${spec.shutdownFlag} now ` +
+            `|| sudo -n systemctl ${spec.systemctl} ` +
+            `|| shutdown ${spec.shutdownFlag} now ` +
+            `|| systemctl ${spec.systemctl}`;
+        const result = await runSshHostPower(settings, remoteCmd);
+        return {
+            method: 'ssh',
+            target: `${settings.sshUsername}@${settings.sshHost}`,
+            output: (result.stdout || '').trim(),
+            message: `Host ${spec.label} dispatched to ${settings.sshHost} over SSH.`,
+        };
+    }
+
+    // 2. Windows host.
+    if (IS_WIN) {
+        await execFileAsync('shutdown', spec.winArgs, { timeout: 10000 });
+        return {
+            method: 'windows',
+            target: os.hostname(),
+            message: `Host ${spec.label} initiated on ${os.hostname()}.`,
+        };
+    }
+
+    // 3. Linux host: escape the container namespace first when possible,
+    //    then fall back to talking to the local init system directly.
+    const attempts = [
+        { method: 'nsenter', file: 'nsenter', args: ['-t', '1', '-m', '-u', '-i', '-n', '-p', '--', 'systemctl', spec.systemctl], containerOnly: true },
+        { method: 'systemctl', file: 'systemctl', args: [spec.systemctl] },
+        { method: 'shutdown', file: 'shutdown', args: [spec.shutdownFlag, 'now'] },
+    ];
+
+    const failures = [];
+    for (const attempt of attempts) {
+        if (attempt.containerOnly && !IN_CONTAINER) continue;
+        try {
+            await execFileAsync(attempt.file, attempt.args, { timeout: 10000 });
+            return {
+                method: attempt.method,
+                target: os.hostname(),
+                message: `Host ${spec.label} initiated on ${os.hostname()} via ${attempt.method}.`,
+            };
+        } catch (err) {
+            failures.push(`${attempt.method}: ${err.message.split('\n')[0]}`);
+        }
+    }
+
+    const err = new Error(
+        `Unable to ${spec.label} the host (${failures.join(' | ')}). ` +
+        (IN_CONTAINER
+            ? 'The dashboard is running inside a container: configure an SSH host under Settings → Host SSH Terminal, or run the container privileged with host PID namespace.'
+            : 'Ensure the dashboard process is allowed to power off this machine (root or sudo without password).')
+    );
+    err.statusCode = 409;
+    throw err;
+}
+
+app.post('/api/system/host-power', async (req, res) => {
+    const { action, confirm } = req.body || {};
+    const agent = req.body?.agent || 'USER';
+
+    if (!HOST_POWER_ACTIONS[action]) {
+        return res.status(400).json({ error: "Invalid action. Use 'reboot' or 'shutdown'." });
+    }
+    if (confirm !== true) {
+        return res.status(400).json({ error: `Host ${action} requires explicit confirmation.` });
+    }
+
+    try {
+        console.log(`[System] Host power action requested: ${action}`);
+        const result = await triggerHostPower(action);
+        auditLog(agent, `HOST_${action.toUpperCase()}`, { method: result.method, target: result.target }, true);
+        res.json({ success: true, action, ...result });
+    } catch (err) {
+        auditLog(agent, `HOST_${action.toUpperCase()}_FAILED`, { error: err.message }, false);
+        res.status(err.statusCode || 500).json({ error: err.message });
+    }
+});
+
 app.get('/api/logs/:source', async (req, res) => {
     try {
         const source = req.params.source;
