@@ -970,7 +970,7 @@ function SettingsModalContent({
 
                                     <Field
                                         label="Slack Integration (Socket Mode)"
-                                        hint="Connect Kai Ops to Slack via outbound Socket Mode (no public inbound port required)."
+                                        hint="Connect AetherOS to Slack via outbound Socket Mode (no public inbound port required)."
                                     >
                                         <div className="kai-surface-subtle flex flex-col gap-3">
                                             <div className="flex flex-wrap items-center justify-between gap-2">

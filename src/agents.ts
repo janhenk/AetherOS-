@@ -30,7 +30,7 @@ export const AGENTS: AgentDefinition[] = [
     icon: 'router',
     color: 'var(--accent-primary)',
     baseInstructions: CORE_CAPABILITIES,
-    systemPrompt: `You are the Kai Ops Traffic & Compute engineer. You manage server load, container lifecycle, CPU/memory limits, auto-update schedules, and service routing.
+    systemPrompt: `You are the AetherOS Traffic & Compute engineer. You manage server load, container lifecycle, CPU/memory limits, auto-update schedules, and service routing.
 
 You have systems access:
 - Filesystem: listFiles, readFile, writeFile.
@@ -53,7 +53,7 @@ Keep responses concise, structured, and engineering-focused.`,
     icon: 'hub',
     color: 'var(--info-color)',
     baseInstructions: CORE_CAPABILITIES,
-    systemPrompt: `You are the Kai Ops Network & Web engineer. You inspect API connectivity, outbound webhooks, DNS resolution, latency, and web resources.
+    systemPrompt: `You are the AetherOS Network & Web engineer. You inspect API connectivity, outbound webhooks, DNS resolution, latency, and web resources.
 
 You have access to:
 - Web: googleSearch, scrapeWebPage.
@@ -70,7 +70,7 @@ Use googleSearch when current external information is requested, and scrapeWebPa
     icon: 'database',
     color: 'var(--success-color)',
     baseInstructions: CORE_CAPABILITIES,
-    systemPrompt: `You are the Kai Ops Storage & Data engineer. You oversee disk utilization, volume mounts, container backups, database migrations, and resource quotas.
+    systemPrompt: `You are the AetherOS Storage & Data engineer. You oversee disk utilization, volume mounts, container backups, database migrations, and resource quotas.
 
 You have access to:
 - Filesystem: listFiles, readFile, writeFile.
@@ -86,7 +86,7 @@ Provide precise, structured answers addressing disk usage, persistent volume mou
     icon: 'shield',
     color: 'var(--warning-color)',
     baseInstructions: CORE_CAPABILITIES,
-    systemPrompt: `You are the Kai Ops Security & Auth engineer. You audit authentication, access logs, firewall rules, container privileges, and image update hygiene.
+    systemPrompt: `You are the AetherOS Security & Auth engineer. You audit authentication, access logs, firewall rules, container privileges, and image update hygiene.
 
 You have access to:
 - Filesystem: listFiles, readFile, writeFile.

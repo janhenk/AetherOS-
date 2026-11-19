@@ -2834,14 +2834,14 @@ app.get('*', (req, res) => {
     else res.status(404).send('Frontend not built. Run npm run build.');
 });
 
-console.log('[SYS] Initializing Kai Ops Backend Server...');
+console.log('[SYS] Initializing AetherOS Backend Server...');
 console.log(`[SYS] Environment: ${process.env.NODE_ENV || 'development'}`);
 console.log(`[SYS] Port: ${port}`);
 console.log(`[SYS] Workspace: ${WORKSPACE_ROOT}`);
 
 app.listen(port, () => {
     console.log('\n================================================');
-    console.log(`  KAI OPS BACKEND ONLINE - PORT: ${port}`);
+    console.log(`  AETHEROS BACKEND ONLINE - PORT: ${port}`);
     console.log(`  VERSION: ${projectVersion}`);
     console.log('================================================\n');
 });
