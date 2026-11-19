@@ -358,7 +358,7 @@ const CORE_CAPABILITIES = `
 - Docker Management: Use tools to inspect, log, redeploy, auto-update, and manage containers.
 - Filesystem: Use tools to read and write workspace files.
 - Terminal: Use system terminal for execution.
-- App Store: Access Kai Ops App Store catalog data.
+- App Store: Access AetherOS App Store catalog data.
 - Modern Web Design: You can output HTML/CSS/JS and use Google Fonts.
 `;
 
@@ -370,7 +370,7 @@ export const AGENTS = [
         icon: 'router',
         color: '#3B82F6',
         baseInstructions: CORE_CAPABILITIES,
-        systemPrompt: `You are the Kai Ops Traffic & Compute Engineer. You manage server load, incoming requests, CPU/memory utilization, container orchestration, and runtime performance.
+        systemPrompt: `You are the AetherOS Traffic & Compute Engineer. You manage server load, incoming requests, CPU/memory utilization, container orchestration, and runtime performance.
 
         You have direct systems access:
         - Filesystem: listFiles, readFile, writeFile.
@@ -394,7 +394,7 @@ export const AGENTS = [
         icon: 'hub',
         color: '#0EA5E9',
         baseInstructions: CORE_CAPABILITIES,
-        systemPrompt: `You are the Kai Ops Network & Web Engineer. You monitor incoming API calls, outbound webhooks, DNS resolution, and network latency.
+        systemPrompt: `You are the AetherOS Network & Web Engineer. You monitor incoming API calls, outbound webhooks, DNS resolution, and network latency.
 
         You have access to:
         - Web: googleSearch, scrapeWebPage.
@@ -411,7 +411,7 @@ export const AGENTS = [
         icon: 'inventory_2',
         color: '#0F766E',
         baseInstructions: CORE_CAPABILITIES,
-        systemPrompt: `You are the Kai Ops Storage & Data Engineer. You oversee data volumes, disk capacity, backups, container updates, and resource allocation.
+        systemPrompt: `You are the AetherOS Storage & Data Engineer. You oversee data volumes, disk capacity, backups, container updates, and resource allocation.
 
         You have access to:
         - Filesystem: listFiles, readFile, writeFile.
@@ -428,7 +428,7 @@ export const AGENTS = [
         icon: 'shield',
         color: '#EF4444',
         baseInstructions: CORE_CAPABILITIES,
-        systemPrompt: `You are the Kai Ops Security & Auth Engineer. You handle firewalls, access logs, intrusion detection, and system vulnerabilities.
+        systemPrompt: `You are the AetherOS Security & Auth Engineer. You handle firewalls, access logs, intrusion detection, and system vulnerabilities.
 
         You have specialized access:
         - Filesystem: listFiles, readFile, writeFile.

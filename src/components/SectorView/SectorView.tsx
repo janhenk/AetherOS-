@@ -168,6 +168,7 @@ export default function SectorView() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'running' | 'stopped'>('all');
     const [confirmPrune, setConfirmPrune] = useState(false);
+    const [confirmHostPower, setConfirmHostPower] = useState<'reboot' | 'shutdown' | null>(null);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const [quickFeedback, setQuickFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
     const [containerFeedback, setContainerFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
@@ -268,6 +269,34 @@ export default function SectorView() {
             setQuickFeedback({
                 kind: 'error',
                 text: err instanceof Error ? err.message : 'Failed to prune unused images.',
+            });
+        } finally {
+            setIsProcessing(null);
+        }
+    };
+
+    const handleHostPower = async (action: 'reboot' | 'shutdown') => {
+        setIsProcessing(`host-${action}`);
+        setConfirmHostPower(null);
+        setQuickFeedback(null);
+        try {
+            const res = await apiFetch('/api/system/host-power', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, confirm: true }),
+            });
+            const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+            if (!res.ok || data.error) {
+                throw new Error(data.error || `Host ${action} failed (${res.status})`);
+            }
+            setQuickFeedback({
+                kind: 'success',
+                text: data.message || `Host ${action} dispatched. This console will go offline shortly.`,
+            });
+        } catch (err: unknown) {
+            setQuickFeedback({
+                kind: 'error',
+                text: err instanceof Error ? err.message : `Failed to ${action} the host.`,
             });
         } finally {
             setIsProcessing(null);
@@ -574,21 +603,21 @@ export default function SectorView() {
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {!dockerRunning && (
                         <button
                             type="button"
                             onClick={handleStartDocker}
                             disabled={isProcessing === 'docker-start'}
-                            className="kai-btn kai-btn-primary justify-start"
+                            className="kai-btn kai-btn-primary kai-btn-sm justify-start min-w-0 w-full"
                         >
                             <span
-                                className={`material-symbols-outlined text-[18px] ${isProcessing === 'docker-start' ? 'animate-spin' : ''}`}
+                                className={`material-symbols-outlined text-[16px] shrink-0 ${isProcessing === 'docker-start' ? 'animate-spin' : ''}`}
                                 aria-hidden="true"
                             >
                                 {isProcessing === 'docker-start' ? 'sync' : 'power_settings_new'}
                             </span>
-                            <span>Start Docker Engine</span>
+                            <span className="truncate">Start Docker Engine</span>
                         </button>
                     )}
 
@@ -596,77 +625,153 @@ export default function SectorView() {
                         <button
                             type="button"
                             onClick={handleDiagnose}
-                            className="kai-btn kai-btn-secondary justify-start"
+                            className="kai-btn kai-btn-secondary kai-btn-sm justify-start min-w-0 w-full"
                         >
-                            <span className="material-symbols-outlined text-[18px]" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
+                            <span className="material-symbols-outlined text-[16px] shrink-0" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
                                 troubleshoot
                             </span>
-                            <span>AI Health Check</span>
+                            <span className="truncate">AI Health Check</span>
                         </button>
                     )}
 
                     <button
                         type="button"
                         onClick={() => setAutoUpdateModal({ open: true })}
-                        className="kai-btn kai-btn-secondary justify-start"
+                        className="kai-btn kai-btn-secondary kai-btn-sm justify-start min-w-0 w-full"
                     >
-                        <span className="material-symbols-outlined text-[18px]" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
+                        <span className="material-symbols-outlined text-[16px] shrink-0" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
                             system_update_alt
                         </span>
-                        <span>Auto-Updates</span>
+                        <span className="truncate">Auto-Updates</span>
                     </button>
 
                     <button
                         type="button"
                         onClick={() => setTerminalOpen(true)}
-                        className="kai-btn kai-btn-secondary justify-start"
+                        className="kai-btn kai-btn-secondary kai-btn-sm justify-start min-w-0 w-full"
                     >
-                        <span className="material-symbols-outlined text-[18px]" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
+                        <span className="material-symbols-outlined text-[16px] shrink-0" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
                             terminal
                         </span>
-                        <span>Host Terminal</span>
+                        <span className="truncate">Host Terminal</span>
                     </button>
 
                     <button
                         type="button"
                         onClick={() => setCronManagerOpen(true)}
-                        className="kai-btn kai-btn-secondary justify-start"
+                        className="kai-btn kai-btn-secondary kai-btn-sm justify-start min-w-0 w-full"
                     >
-                        <span className="material-symbols-outlined text-[18px]" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
+                        <span className="material-symbols-outlined text-[16px] shrink-0" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
                             schedule
                         </span>
-                        <span>Scheduled Jobs</span>
+                        <span className="truncate">Scheduled Jobs</span>
                     </button>
 
                     <button
                         type="button"
                         onClick={() => setNetworkVisualizerOpen(true)}
-                        className="kai-btn kai-btn-secondary justify-start"
+                        className="kai-btn kai-btn-secondary kai-btn-sm justify-start min-w-0 w-full"
                     >
-                        <span className="material-symbols-outlined text-[18px]" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
+                        <span className="material-symbols-outlined text-[16px] shrink-0" style={{ color: 'var(--accent-primary)' }} aria-hidden="true">
                             hub
                         </span>
-                        <span>Network Topology</span>
+                        <span className="truncate">Network Topology</span>
                     </button>
+
+                    {confirmHostPower === 'reboot' ? (
+                        <div
+                            className="sm:col-span-2 flex items-center gap-2 p-1 rounded-md"
+                            style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--warning-color)' }}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => void handleHostPower('reboot')}
+                                className="kai-btn kai-btn-danger kai-btn-sm flex-1"
+                            >
+                                Confirm Reboot
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmHostPower(null)}
+                                className="kai-btn kai-btn-ghost kai-btn-sm"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setConfirmHostPower('reboot')}
+                            disabled={isProcessing === 'host-reboot' || isProcessing === 'host-shutdown'}
+                            className="kai-btn kai-btn-secondary kai-btn-sm justify-start min-w-0 w-full"
+                        >
+                            <span
+                                className={`material-symbols-outlined text-[16px] shrink-0 ${isProcessing === 'host-reboot' ? 'animate-spin' : ''}`}
+                                style={{ color: 'var(--warning-color)' }}
+                                aria-hidden="true"
+                            >
+                                {isProcessing === 'host-reboot' ? 'sync' : 'restart_alt'}
+                            </span>
+                            <span className="truncate">{isProcessing === 'host-reboot' ? 'Rebooting Host...' : 'Reboot Host'}</span>
+                        </button>
+                    )}
+
+                    {confirmHostPower === 'shutdown' ? (
+                        <div
+                            className="sm:col-span-2 flex items-center gap-2 p-1 rounded-md"
+                            style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--danger-color)' }}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => void handleHostPower('shutdown')}
+                                className="kai-btn kai-btn-danger kai-btn-sm flex-1"
+                            >
+                                Confirm Shutdown
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmHostPower(null)}
+                                className="kai-btn kai-btn-ghost kai-btn-sm"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setConfirmHostPower('shutdown')}
+                            disabled={isProcessing === 'host-reboot' || isProcessing === 'host-shutdown'}
+                            className="kai-btn kai-btn-secondary kai-btn-sm justify-start min-w-0 w-full"
+                        >
+                            <span
+                                className={`material-symbols-outlined text-[16px] shrink-0 ${isProcessing === 'host-shutdown' ? 'animate-spin' : ''}`}
+                                style={{ color: 'var(--danger-color)' }}
+                                aria-hidden="true"
+                            >
+                                {isProcessing === 'host-shutdown' ? 'sync' : 'power_settings_new'}
+                            </span>
+                            <span className="truncate">{isProcessing === 'host-shutdown' ? 'Shutting Down...' : 'Shutdown Host'}</span>
+                        </button>
+                    )}
 
                     {!confirmPrune ? (
                         <button
                             type="button"
                             onClick={() => setConfirmPrune(true)}
                             disabled={isProcessing === 'docker-prune'}
-                            className="kai-btn kai-btn-secondary justify-start"
+                            className="kai-btn kai-btn-secondary kai-btn-sm justify-start min-w-0 w-full"
                         >
                             <span
-                                className={`material-symbols-outlined text-[18px] ${isProcessing === 'docker-prune' ? 'animate-spin' : ''}`}
+                                className={`material-symbols-outlined text-[16px] shrink-0 ${isProcessing === 'docker-prune' ? 'animate-spin' : ''}`}
                                 style={{ color: 'var(--warning-color)' }}
                                 aria-hidden="true"
                             >
                                 {isProcessing === 'docker-prune' ? 'sync' : 'cleaning_services'}
                             </span>
-                            <span>{isProcessing === 'docker-prune' ? 'Pruning...' : 'Prune Images'}</span>
+                            <span className="truncate">{isProcessing === 'docker-prune' ? 'Pruning...' : 'Prune Images'}</span>
                         </button>
                     ) : (
-                        <div className="flex items-center gap-2 p-1 rounded-md" style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--warning-color)' }}>
+                        <div className="sm:col-span-2 flex items-center gap-2 p-1 rounded-md" style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--warning-color)' }}>
                             <button
                                 type="button"
                                 onClick={handlePruneImages}
@@ -869,39 +974,29 @@ export default function SectorView() {
                             return (
                                 <div
                                     key={container.id}
-                                    className="kai-surface-subtle p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+                                    className="kai-surface-subtle p-3 flex flex-col gap-2.5 overflow-hidden"
                                 >
-                                    {/* Identity & Live Metrics */}
-                                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                                    {/* Identity & Metadata */}
+                                    <div className="flex items-start gap-2.5 min-w-0">
                                         <span
                                             className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${isBusy ? 'animate-pulse' : ''}`}
                                             style={{ backgroundColor: dotColor }}
                                             title={`Status: ${container.status}`}
                                         />
                                         <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-center gap-2">
+                                            <div className="flex items-center justify-between gap-2 min-w-0">
                                                 <span className="text-sm font-semibold truncate" title={cleanName}>
                                                     {cleanName}
                                                 </span>
                                                 {isProtected && (
-                                                    <span className="kai-badge kai-badge-warning" title="Protected core container">
+                                                    <span className="kai-badge kai-badge-warning shrink-0" title="Protected core container">
                                                         Protected
                                                     </span>
                                                 )}
-                                                {container.cpuPerc && (
-                                                    <span className="kai-badge kai-tabular">
-                                                        CPU {container.cpuPerc}
-                                                    </span>
-                                                )}
-                                                {container.memPerc && (
-                                                    <span className="kai-badge kai-tabular" title={container.memUsage || undefined}>
-                                                        RAM {container.memPerc}
-                                                    </span>
-                                                )}
                                             </div>
-                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                                            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs mt-0.5 min-w-0" style={{ color: 'var(--text-muted)' }}>
                                                 {container.image && (
-                                                    <span className="kai-mono truncate max-w-[260px]" title={container.image}>
+                                                    <span className="kai-mono truncate max-w-full" title={container.image}>
                                                         {container.image}
                                                     </span>
                                                 )}
@@ -919,9 +1014,22 @@ export default function SectorView() {
                                         </div>
                                     </div>
 
-                                    {/* Auto-Update Pill + Visible Compact Toolbar */}
-                                    <div className="flex flex-wrap items-center gap-2 shrink-0">
-                                        <div className="inline-flex items-center gap-1">
+                                    {/* Live Metrics & Auto-Update Controls */}
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {container.cpuPerc && (
+                                                <span className="kai-badge kai-tabular">
+                                                    CPU {container.cpuPerc}
+                                                </span>
+                                            )}
+                                            {container.memPerc && (
+                                                <span className="kai-badge kai-tabular" title={container.memUsage || undefined}>
+                                                    RAM {container.memPerc}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="inline-flex items-center gap-1 ml-auto">
                                             <button
                                                 type="button"
                                                 disabled={isProtected || isBusy}
@@ -945,146 +1053,150 @@ export default function SectorView() {
                                             <button
                                                 type="button"
                                                 onClick={() => setAutoUpdateModal({ open: true, containerName: cleanName })}
-                                                className="kai-btn kai-btn-ghost kai-btn-xs"
+                                                className="kai-btn kai-btn-ghost kai-btn-xs !px-1.5"
                                                 aria-label={`Configure auto-update schedule for ${cleanName}`}
                                                 title="Configure custom cron or view policy"
                                             >
                                                 <span className="material-symbols-outlined text-[15px]" aria-hidden="true">schedule</span>
                                             </button>
                                         </div>
+                                    </div>
 
-                                        <div className="flex flex-wrap items-center gap-1">
-                                            {container.status !== 'running' ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void handleDockerAction(container.id, 'start')}
-                                                    disabled={isBusy}
-                                                    className="kai-btn kai-btn-ghost kai-btn-xs"
-                                                    aria-label={`Start ${cleanName}`}
-                                                    title="Start"
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--success-color)' }} aria-hidden="true">
-                                                        play_arrow
-                                                    </span>
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void handleDockerAction(container.id, 'stop')}
-                                                    disabled={isProtected || isBusy}
-                                                    className="kai-btn kai-btn-ghost kai-btn-xs"
-                                                    aria-label={`Stop ${cleanName}`}
-                                                    title={isProtected ? 'Protected container cannot be stopped' : 'Stop'}
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--warning-color)' }} aria-hidden="true">
-                                                        stop
-                                                    </span>
-                                                </button>
-                                            )}
-
+                                    {/* Compact Action Toolbar */}
+                                    <div
+                                        className="flex flex-wrap items-center gap-1 pt-2 border-t"
+                                        style={{ borderColor: 'var(--border-subtle)' }}
+                                    >
+                                        {container.status !== 'running' ? (
                                             <button
                                                 type="button"
-                                                onClick={() => void handleDockerAction(container.id, 'restart')}
-                                                disabled={isProtected || isBusy}
-                                                className="kai-btn kai-btn-ghost kai-btn-xs"
-                                                aria-label={`Restart ${cleanName}`}
-                                                title={isProtected ? 'Protected container cannot be restarted' : 'Restart'}
+                                                onClick={() => void handleDockerAction(container.id, 'start')}
+                                                disabled={isBusy}
+                                                className="kai-btn kai-btn-ghost kai-btn-xs !px-1.5"
+                                                aria-label={`Start ${cleanName}`}
+                                                title="Start"
                                             >
-                                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">refresh</span>
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => void handlePullAndRedeploy(container)}
-                                                disabled={isProtected || isBusy}
-                                                className="kai-btn kai-btn-ghost kai-btn-xs"
-                                                aria-label={`Pull and redeploy ${cleanName}`}
-                                                title={isProtected ? 'Protected container cannot be redeployed' : 'Pull & Redeploy'}
-                                            >
-                                                <span
-                                                    className={`material-symbols-outlined text-[16px] ${isProcessing === `redeploy:${cleanName}` ? 'animate-spin' : ''}`}
-                                                    style={{ color: 'var(--accent-primary)' }}
-                                                    aria-hidden="true"
-                                                >
-                                                    {isProcessing === `redeploy:${cleanName}` ? 'sync' : 'cloud_download'}
+                                                <span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--success-color)' }} aria-hidden="true">
+                                                    play_arrow
                                                 </span>
                                             </button>
-
+                                        ) : (
                                             <button
                                                 type="button"
-                                                onClick={() => setLogsTarget({ id: container.id, name: cleanName })}
-                                                className="kai-btn kai-btn-ghost kai-btn-xs"
-                                                aria-label={`View logs for ${cleanName}`}
-                                                title="Logs"
+                                                onClick={() => void handleDockerAction(container.id, 'stop')}
+                                                disabled={isProtected || isBusy}
+                                                className="kai-btn kai-btn-ghost kai-btn-xs !px-1.5"
+                                                aria-label={`Stop ${cleanName}`}
+                                                title={isProtected ? 'Protected container cannot be stopped' : 'Stop'}
                                             >
-                                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">article</span>
+                                                <span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--warning-color)' }} aria-hidden="true">
+                                                    stop
+                                                </span>
                                             </button>
+                                        )}
 
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleInspectOpen(container.id, 'compose')}
-                                                disabled={isBusy}
-                                                className="kai-btn kai-btn-ghost kai-btn-xs"
-                                                aria-label={`View Compose YAML for ${cleanName}`}
-                                                title="Compose Manifest"
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleDockerAction(container.id, 'restart')}
+                                            disabled={isProtected || isBusy}
+                                            className="kai-btn kai-btn-ghost kai-btn-xs !px-1.5"
+                                            aria-label={`Restart ${cleanName}`}
+                                            title={isProtected ? 'Protected container cannot be restarted' : 'Restart'}
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">refresh</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => void handlePullAndRedeploy(container)}
+                                            disabled={isProtected || isBusy}
+                                            className="kai-btn kai-btn-ghost kai-btn-xs !px-1.5"
+                                            aria-label={`Pull and redeploy ${cleanName}`}
+                                            title={isProtected ? 'Protected container cannot be redeployed' : 'Pull & Redeploy'}
+                                        >
+                                            <span
+                                                className={`material-symbols-outlined text-[16px] ${isProcessing === `redeploy:${cleanName}` ? 'animate-spin' : ''}`}
+                                                style={{ color: 'var(--accent-primary)' }}
+                                                aria-hidden="true"
                                             >
-                                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">description</span>
-                                            </button>
+                                                {isProcessing === `redeploy:${cleanName}` ? 'sync' : 'cloud_download'}
+                                            </span>
+                                        </button>
 
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleInspectOpen(container.id, 'config')}
-                                                disabled={isBusy}
-                                                className="kai-btn kai-btn-ghost kai-btn-xs"
-                                                aria-label={`Edit configuration for ${cleanName}`}
-                                                title="Edit / Reconfigure"
-                                            >
-                                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">edit</span>
-                                            </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setLogsTarget({ id: container.id, name: cleanName })}
+                                            className="kai-btn kai-btn-ghost kai-btn-xs !px-1.5"
+                                            aria-label={`View logs for ${cleanName}`}
+                                            title="Logs"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">article</span>
+                                        </button>
 
-                                            <button
-                                                type="button"
-                                                onClick={() => handleDiagnoseContainer(container.id, container.name)}
-                                                className="kai-btn kai-btn-ghost kai-btn-xs"
-                                                aria-label={`AI diagnose ${cleanName}`}
-                                                title="AI Diagnose"
-                                            >
-                                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">troubleshoot</span>
-                                            </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleInspectOpen(container.id, 'compose')}
+                                            disabled={isBusy}
+                                            className="kai-btn kai-btn-ghost kai-btn-xs !px-1.5"
+                                            aria-label={`View Compose YAML for ${cleanName}`}
+                                            title="Compose Manifest"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">description</span>
+                                        </button>
 
-                                            {confirmDeleteId === container.id ? (
-                                                <div className="inline-flex items-center gap-1 ml-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => void handleDockerAction(container.id, 'rm')}
-                                                        disabled={isProtected || isBusy}
-                                                        className="kai-btn kai-btn-danger kai-btn-xs"
-                                                    >
-                                                        Confirm
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setConfirmDeleteId(null)}
-                                                        className="kai-btn kai-btn-ghost kai-btn-xs"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                </div>
-                                            ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleInspectOpen(container.id, 'config')}
+                                            disabled={isBusy}
+                                            className="kai-btn kai-btn-ghost kai-btn-xs !px-1.5"
+                                            aria-label={`Edit configuration for ${cleanName}`}
+                                            title="Edit / Reconfigure"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">edit</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDiagnoseContainer(container.id, container.name)}
+                                            className="kai-btn kai-btn-ghost kai-btn-xs !px-1.5"
+                                            aria-label={`AI diagnose ${cleanName}`}
+                                            title="AI Diagnose"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">troubleshoot</span>
+                                        </button>
+
+                                        {confirmDeleteId === container.id ? (
+                                            <div className="inline-flex items-center gap-1 ml-auto">
                                                 <button
                                                     type="button"
-                                                    onClick={() => setConfirmDeleteId(container.id)}
+                                                    onClick={() => void handleDockerAction(container.id, 'rm')}
                                                     disabled={isProtected || isBusy}
-                                                    className="kai-btn kai-btn-ghost kai-btn-xs"
-                                                    aria-label={`Delete ${cleanName}`}
-                                                    title={isProtected ? 'Protected container cannot be deleted' : 'Delete container'}
+                                                    className="kai-btn kai-btn-danger kai-btn-xs"
                                                 >
-                                                    <span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--danger-color)' }} aria-hidden="true">
-                                                        delete
-                                                    </span>
+                                                    Confirm
                                                 </button>
-                                            )}
-                                        </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setConfirmDeleteId(null)}
+                                                    className="kai-btn kai-btn-ghost kai-btn-xs"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => setConfirmDeleteId(container.id)}
+                                                disabled={isProtected || isBusy}
+                                                className="kai-btn kai-btn-ghost kai-btn-xs !px-1.5 ml-auto"
+                                                aria-label={`Delete ${cleanName}`}
+                                                title={isProtected ? 'Protected container cannot be deleted' : 'Delete container'}
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--danger-color)' }} aria-hidden="true">
+                                                    delete
+                                                </span>
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             );

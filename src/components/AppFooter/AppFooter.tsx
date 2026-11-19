@@ -66,7 +66,7 @@ const AppFooter = memo(function AppFooter() {
             </strong>
           </span>
           <span aria-hidden="true">·</span>
-          <span>Kai Ops</span>
+          <span>AetherOS</span>
         </div>
       </div>
     </footer>

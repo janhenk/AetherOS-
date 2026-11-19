@@ -194,7 +194,7 @@ const AppHeader = memo(function AppHeader({
                 className="text-base font-bold tracking-tight"
                 style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
               >
-                Kai Ops
+                AetherOS
               </h1>
               <span className="kai-badge kai-badge-accent kai-mono kai-tabular">v{version}</span>
               {state.isYoloMode && (

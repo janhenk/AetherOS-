@@ -45,7 +45,7 @@ export function AuthOverlay({ onAuthenticated }: { onAuthenticated: () => void }
           setError(
             err instanceof Error
               ? `Connection error: ${err.message}`
-              : 'Failed to connect to the Kai Ops server.',
+              : 'Failed to connect to the AetherOS server.',
           );
         }
       } finally {
@@ -104,7 +104,7 @@ export function AuthOverlay({ onAuthenticated }: { onAuthenticated: () => void }
       >
         <div className="flex items-center gap-3 text-sm font-medium">
           <span className="material-symbols-outlined animate-spin text-[20px]">sync</span>
-          <span>Connecting to Kai Ops...</span>
+          <span>Connecting to AetherOS...</span>
         </div>
       </div>
     );
@@ -143,7 +143,7 @@ export function AuthOverlay({ onAuthenticated }: { onAuthenticated: () => void }
             className="text-xl font-bold tracking-tight"
             style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
           >
-            {needsSetup ? 'Initialize Kai Ops' : 'Sign in to Kai Ops'}
+            {needsSetup ? 'Initialize AetherOS' : 'Sign in to AetherOS'}
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
             {needsSetup
@@ -214,7 +214,7 @@ export function AuthOverlay({ onAuthenticated }: { onAuthenticated: () => void }
             color: 'var(--text-muted)',
           }}
         >
-          <span>Kai Ops Console</span>
+          <span>AetherOS Console</span>
           <span className="kai-mono">Protected Session</span>
         </div>
       </div>

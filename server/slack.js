@@ -203,7 +203,7 @@ async function handleSlackEvent({ event, client, say }, getSettingsFn, baseUrl, 
         if (['help', 'list', 'agents', 'hi', 'hello'].includes(rawText.toLowerCase())) {
             const agentList = AGENTS.map(a => `*${a.id}* - ${a.name} (${a.shortName})`).join('\n');
             await say({
-                text: `*Kai Ops Slack Integration Help*\n\nTo interact with an operations agent, prefix your message with its ID (e.g., \`nav status\`). In DMs, I remember which agent you last spoke to.\n\n*Available Agents:*\n${agentList}\n\n_System status: Online._\n_Type \`clear\` to reset conversation memory._`,
+                text: `*AetherOS Slack Integration Help*\n\nTo interact with an operations agent, prefix your message with its ID (e.g., \`nav status\`). In DMs, I remember which agent you last spoke to.\n\n*Available Agents:*\n${agentList}\n\n_System status: Online._\n_Type \`clear\` to reset conversation memory._`,
                 thread_ts: event.ts // Use event.ts to reply to the specific message even in DMs
             });
             return;
